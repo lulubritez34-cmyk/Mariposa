@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>El Tiempo, la Memoria y la Permanencia | Escenario multiagente</title>
+<style>
+:root{--crema:#fff4dc;--vid:rgba(28,14,22,.72)}
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;background:#2b1f4a;color:var(--crema);font:15px/1.4 "Segoe UI",system-ui,sans-serif}
+#fondo{position:fixed;inset:0;width:100%;height:100%;display:block}
+header{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:14px;right:14px;display:flex;gap:12px;align-items:center;z-index:5;flex-wrap:wrap}
+h1{margin:0;font-size:clamp(15px,2.2vw,22px);font-weight:800;letter-spacing:.02em;text-shadow:0 2px 8px #0008;flex:1 1 260px}
+h1 small{display:block;font-size:12px;font-weight:500;opacity:.8}
+button{font:inherit;color:inherit;cursor:pointer;border:1px solid #ffe3a366;background:var(--vid);border-radius:999px;padding:8px 16px;backdrop-filter:blur(6px)}
+button:hover{background:rgba(70,30,40,.85)}button:disabled{opacity:.5;cursor:wait}
+#bCharla{font-weight:700;background:#c2410c;border-color:#fdba74}#bCharla.on{background:#7f1d1d}
+#escenario{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top,0px) + 64px);bottom:92px;display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:0;z-index:2}
+.slot{position:relative;min-width:0}
+.slot iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:transparent}
+.placa{position:absolute;left:50%;bottom:0;transform:translateX(-50%);z-index:3;display:flex;gap:8px;align-items:center;background:var(--vid);border:1px solid #ffe3a344;border-radius:999px;padding:4px 14px;font-size:13px;white-space:nowrap;backdrop-filter:blur(6px)}
+.placa b{font-weight:800}.punto{width:9px;height:9px;border-radius:50%;background:#8a7f78}
+.slot[data-modo=listening] .punto{background:#38bdf8;box-shadow:0 0 8px #38bdf8}
+.slot[data-modo=speaking] .punto{background:#fbbf24;box-shadow:0 0 10px #fbbf24;animation:l .8s infinite}
+.slot[data-modo=conectando] .punto,.slot[data-modo=cargando] .punto{background:#fb923c;animation:l 1s infinite}
+.slot[data-modo=error] .punto{background:#ef4444}
+@keyframes l{50%{opacity:.35}}
+.placa button{padding:3px 12px;font-size:13px}
+#sub{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 14px);width:min(900px,94vw);min-height:52px;z-index:5;background:var(--vid);border:1px solid #ffe3a333;border-radius:14px;padding:8px 14px;backdrop-filter:blur(6px);font-size:15px}
+#sub .q{font-weight:800;margin-right:6px}#sub .t{display:block;font-size:12px;opacity:.75;margin-bottom:2px}
+#fallo{position:fixed;z-index:20;left:50%;top:calc(env(safe-area-inset-top,0px) + 70px);transform:translateX(-50%);width:min(760px,94vw);max-height:62vh;overflow:auto;background:#3b0d12f2;border:2px solid #f87171;border-radius:14px;padding:12px 14px;box-shadow:0 12px 40px #000a}
+#fallo[hidden]{display:none}#fallo h2{margin:0 0 6px;font-size:16px;color:#fecaca}
+#fallo li{margin:6px 0;list-style:none;border-left:4px solid #f87171;padding-left:8px;word-break:break-word}
+#fallo li.aviso{border-color:#fbbf24}#fallo li b{color:#fde68a}#fallo code{display:block;font:12.5px/1.35 ui-monospace,Consolas,monospace;color:#fff;margin-top:2px}
+#fallo .bt{display:flex;gap:8px;margin-top:8px}#fallo .bt button{padding:4px 12px;font-size:13px}
+@media (max-width:760px){
+ #escenario{grid-template-columns:1fr;grid-template-rows:repeat(3,1fr);bottom:96px;top:calc(env(safe-area-inset-top,0px) + 100px)}
+ header button{padding:6px 12px}.placa{bottom:2px}
+}
+</style>
+</head>
+<body>
+<canvas id="fondo" aria-hidden="true"></canvas>
+<header>
+  <h1>El Tiempo, la Memoria y la Permanencia<small>Atardecer en el Bañado La Estrella · tres voces, tres cuentas de ElevenLabs</small></h1>
+  <button id="bCharla" type="button">▶ Charla guiada</button>
+</header>
+<main id="escenario" aria-label="Escenario con tres personajes"></main>
+<div id="sub" role="status" aria-live="polite"><span class="t">Elegí «Charla guiada» para que conversen entre ellos, o tocá el botón «Hablar» de un personaje para hablarle vos.</span></div>
+<section id="fallo" role="alert" hidden><h2>⚠ Algo falló</h2><ul id="lista"></ul>
+  <div class="bt"><button id="bCopiar" type="button">Copiar el detalle</button><button id="bCerrar" type="button">Cerrar</button></div></section>
+
+<script>
+'use strict';
+/* ===== CONFIGURACIÓN: cada personaje tiene SU agente (pueden ser de cuentas distintas) =====
+   Para probar otro agente sin tocar el código: ?arthur=ID  ?ares=ID  ?guazu=ID  */
+const Q = new URLSearchParams(location.search);
+const PJ = {
+  arthur: { nombre: 'Arthur Schopenhauer', corto: 'Arthur', agente: 'agent_8701m4s376jmfq4tybga1q3e9ana', pagina: 'arthur.html',
+    rol: 'Sos Arthur Schopenhauer. Tu postura: el tiempo lo desgasta todo y el deseo de perdurar o de dejar un legado es vanidad pura. Sé sarcástico y erudito, pero breve.' },
+  ares: { nombre: 'Ares, el loro', corto: 'Ares', agente: 'agent_2101m4f68aj1fh8ankzf7cwrh370', pagina: 'ares.html',
+    rol: 'Sos Ares, el loro formoseño. Tu postura: la memoria perdura por la tradición oral, los cuentos y la repetición (vos sos un loro: repetir es tu arte). Contá cómo las historias del Bañado La Estrella pasaron de generación en generación; aclará cuando algo es leyenda y no un dato comprobado.' },
+  guazu: { nombre: 'Guazú, el lobo de crin', corto: 'Guazú', agente: 'agent_9901m5dr7r1yfarsygvhvfakh8wj', pagina: 'guazu.html',
+    rol: 'Sos Guazú, el aguará guazú joven, tímido y muy curioso. Tu postura: el Bañado cambia todo el tiempo (las aguas van y vienen, la vegetación muere y renace); para vos el tiempo no es una carga pesimista ni una historia contada, sino un ciclo físico de transformación. Terminá siempre con una pregunta corta para alguno de los otros.' }
+};
+const ORDEN = ['arthur', 'ares', 'guazu'], TURNOS = 9, TEMA = 'El Tiempo, la Memoria y la Permanencia';
+for (const k of ORDEN) if (Q.get(k)) PJ[k].agente = Q.get(k).trim();
+
+/* ===== Cartel de fallos: texto exacto + de qué personaje ===== */
+const $ = (id) => document.getElementById(id), fallos = [];
+function fallo(pj, etapa, texto, aviso) {
+  const quien = pj && PJ[pj] ? PJ[pj].nombre : 'Escenario', clave = quien + etapa + texto;
+  if (fallos.some((f) => f.clave === clave)) return;
+  fallos.push({ clave, quien, etapa, texto: texto + (etapa === 'micrófono' ? '\nQué hacer: permití el micrófono en el candado de la barra de direcciones y volvé a tocar «Hablar».' : ''), aviso });
+  if (pj && PJ[pj] && !aviso) poner(pj, 'error');
+  $('lista').innerHTML = fallos.map((f) => `<li class="${f.aviso ? 'aviso' : ''}"><b>${esc(f.quien)}</b> · ${esc(f.etapa)}<code>${esc(f.texto)}</code></li>`).join('');
+  $('fallo').hidden = false; console.error('[escenario]', quien, etapa, texto);
+}
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+$('bCerrar').onclick = () => { $('fallo').hidden = true; };
+$('bCopiar').onclick = () => navigator.clipboard?.writeText(fallos.map((f) => `${f.quien} · ${f.etapa}: ${f.texto}`).join('\n'));
+addEventListener('error', (e) => fallo(null, 'página del escenario', (e.message || 'Error') + (e.lineno ? ` (línea ${e.lineno})` : '')));
+addEventListener('unhandledrejection', (e) => fallo(null, 'página del escenario', e.reason?.message || String(e.reason)));
+
+/* ===== Fondo: atardecer cálido con siluetas de palmeras caranday y lapachos ===== */
+function pintarFondo() {
+  const c = $('fondo'), d = Math.min(devicePixelRatio || 1, 2), W = innerWidth, H = innerHeight;
+  c.width = W * d; c.height = H * d;
+  const g = c.getContext('2d'); if (!g) throw new Error('El navegador no permite dibujar el fondo (canvas 2D).');
+  g.scale(d, d);
+  const hz = H * 0.66, s = H / 720;
+  let r = 7; const R = () => (r = (r * 16807) % 2147483647) / 2147483647;
+  let gr = g.createLinearGradient(0, 0, 0, hz);
+  [[0, '#2b1f4a'], [.28, '#6b3560'], [.55, '#d4584a'], [.8, '#f59a45'], [1, '#ffd98a']].forEach(([p, col]) => gr.addColorStop(p, col));
+  g.fillStyle = gr; g.fillRect(0, 0, W, hz + 2);
+  const sx = W * 0.5, sy = hz - 28 * s; // sol bajo, detrás del personaje del medio
+  gr = g.createRadialGradient(sx, sy, 0, sx, sy, 300 * s);
+  gr.addColorStop(0, 'rgba(255,240,190,.95)'); gr.addColorStop(.12, 'rgba(255,214,120,.55)'); gr.addColorStop(1, 'rgba(255,170,80,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, W, hz + 2);
+  g.fillStyle = '#fff1c4'; g.beginPath(); g.arc(sx, sy, 34 * s, 0, 7); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.12)'; // nubes
+  for (let i = 0; i < 6; i++) { g.beginPath(); g.ellipse(R() * W, hz * (.18 + R() * .4), 120 * s + R() * 120 * s, 9 * s, 0, 0, 7); g.fill(); }
+  function colinas(col, base, amp) { g.fillStyle = col; g.beginPath(); g.moveTo(0, hz + 2);
+    for (let x = 0; x <= W; x += 8) g.lineTo(x, base - amp * (Math.sin(x * .004 + base) * .6 + Math.sin(x * .011) * .4));
+    g.lineTo(W, hz + 2); g.fill(); }
+  function palmera(x, y, h, col) { // caranday: tronco esbelto y copa en abanico
+    g.strokeStyle = col; g.fillStyle = col; g.lineCap = 'round';
+    g.lineWidth = Math.max(2, h * .035); g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + h * .04 * (R() - .5) * 2, y - h * .5, x + h * .02, y - h); g.stroke();
+    const cx = x + h * .02, cy = y - h;
+    for (let i = 0; i < 15; i++) { const a = -Math.PI + (i / 14) * Math.PI, L = h * (.26 + R() * .06);
+      g.lineWidth = Math.max(1.2, h * .012); g.beginPath(); g.moveTo(cx, cy);
+      g.quadraticCurveTo(cx + Math.cos(a) * L * .6, cy + Math.sin(a) * L * .6 - L * .25, cx + Math.cos(a) * L, cy + Math.sin(a) * L * .55 + L * .22); g.stroke(); }
+  }
+  function lapacho(x, y, h, col, flor) {
+    g.strokeStyle = col; g.fillStyle = col; g.lineCap = 'round';
+    g.lineWidth = Math.max(2.5, h * .05); g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x - h * .05, y - h * .4, x, y - h * .62); g.stroke();
+    g.lineWidth = Math.max(1.5, h * .025);
+    for (const m of [-1, 1]) { g.beginPath(); g.moveTo(x, y - h * .5); g.quadraticCurveTo(x + m * h * .2, y - h * .62, x + m * h * .33, y - h * .78); g.stroke(); }
+    for (let i = 0; i < 34; i++) { const a = R() * 7, q = Math.sqrt(R()) * h * .34; g.beginPath(); g.ellipse(x + Math.cos(a) * q * 1.25, y - h * .74 + Math.sin(a) * q * .65, h * (.07 + R() * .06), h * (.05 + R() * .04), 0, 0, 7); g.fill(); }
+    g.fillStyle = flor; for (let i = 0; i < 40; i++) { const a = R() * 7, q = Math.sqrt(R()) * h * .36; g.beginPath(); g.arc(x + Math.cos(a) * q * 1.25, y - h * .74 + Math.sin(a) * q * .65, h * .02, 0, 7); g.fill(); }
+  }
+  colinas('#8a4a67', hz - 22 * s, 26 * s);
+  for (let x = -20, i = 0; x < W + 40; x += (90 + R() * 70) * s, i++) (i % 2 ? lapacho : (a, b, c, d) => palmera(a, b, c * 1.3, d))(x, hz - 14 * s, (150 + R() * 70) * s, 'rgba(120,52,86,.62)', 'rgba(236,120,160,.35)');
+  colinas('#4e2a3d', hz - 4 * s, 12 * s);
+  gr = g.createLinearGradient(0, hz, 0, H); gr.addColorStop(0, '#4a2a2e'); gr.addColorStop(.5, '#2c1a22'); gr.addColorStop(1, '#170d14');
+  g.fillStyle = gr; g.fillRect(0, hz, W, H - hz);
+  for (const [x, h, tipo] of [[.07, 360, 'p'], [.2, 300, 'l'], [.9, 380, 'p'], [.79, 310, 'l'], [.035, 250, 'l'], [.965, 270, 'p']]) {
+    const hh = h * s, col = '#1b0e18';
+    if (tipo === 'p') palmera(W * x, hz + 30 * s, hh, col); else lapacho(W * x, hz + 30 * s, hh, col, 'rgba(226,96,150,.55)');
+  }
+}
+try { pintarFondo(); addEventListener('resize', () => { try { pintarFondo(); } catch (e) { fallo(null, 'fondo', e.message); } }); }
+catch (e) { fallo(null, 'fondo', e.message); }
+
+/* ===== Personajes: cada uno en su propia página, con su agente ===== */
+const est = {};
+function poner(pj, modo) { est[pj].modo = modo; est[pj].slot.dataset.modo = modo; est[pj].txt.textContent = ({ cargando: 'Cargando…', listo: 'En silencio', conectando: 'Conectando…', listening: 'Escucha', speaking: 'Habla', error: 'Con error' })[modo] || modo; }
+for (const k of ORDEN) {
+  const p = PJ[k], slot = document.createElement('div'); slot.className = 'slot';
+  slot.innerHTML = `<iframe title="${esc(p.nombre)}" allow="microphone; autoplay" src="${p.pagina}?escena=1&pj=${k}&agente=${encodeURIComponent(p.agente)}"></iframe>
+    <div class="placa"><span class="punto"></span><b>${esc(p.corto)}</b><span class="st">Cargando…</span></div>`;
+  $('escenario').appendChild(slot);
+  est[k] = { slot, ifr: slot.querySelector('iframe'), txt: slot.querySelector('.st'), modo: 'cargando', listo: false, t: '', espera: [] };
+  slot.dataset.modo = 'cargando';
+  est[k].t0 = setTimeout(() => { if (!est[k].listo) fallo(k, 'figura 3D', 'La figura no avisó que arrancó en 25 segundos (no cargó three.js, el modelo o WebGL). Abrí la consola (F12) para ver el detalle.'); }, 25000);
+  est[k].ifr.addEventListener('error', () => fallo(k, 'figura 3D', 'No se pudo abrir ' + p.pagina));
+}
+const cmd = (k, o) => est[k].ifr.contentWindow.postMessage({ puente_cmd: 1, ...o }, '*');
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+function subtitular(k, txt) { $('sub').innerHTML = `<span class="q" style="color:${{ arthur: '#fcd34d', ares: '#86efac', guazu: '#fdba74' }[k]}">${esc(PJ[k].corto)}:</span>${esc(txt)}`; }
+let corriendo = false, quieto = null;
+
+addEventListener('message', (e) => {
+  const d = e.data; if (!d || d.puente !== 1 || !est[d.pj]) return; const k = d.pj, S = est[k];
+  if (d.tipo === 'listo') { S.listo = true; clearTimeout(S.t0); if (S.modo === 'cargando') poner(k, 'listo'); }
+  else if (d.tipo === 'modo') { const m = d.modo === 'conectando' ? 'conectando' : d.modo === 'speaking' ? 'speaking' : d.modo === 'listening' ? 'listening' : 'listo'; if (S.modo !== 'error' || m !== 'listo') poner(k, m); S.espera.forEach((f) => f('modo', m)); }
+  else if (d.tipo === 'msg') { if (d.quien === 'ai' || d.quien === 'agent') { S.t += (S.t ? ' ' : '') + d.txt; subtitular(k, d.txt); } else if (!corriendo) $('sub').innerHTML = `<span class="q">Vos:</span>${esc(d.txt)}`; S.espera.forEach((f) => f('msg')); }
+  else if (d.tipo === 'err') { fallo(k, d.etapa, d.txt); S.espera.forEach((f) => f('err', d.txt)); }
+  else if (d.tipo === 'desc') { if (S.modo !== 'error') poner(k, 'listo'); S.espera.forEach((f) => f('desc')); }
+});
+
+/* Conecta un agente. Primero con un saludo corto (override first_message); si la cuenta no lo permite, reintenta sin overrides. */
+async function conectar(k, mudo) {
+  const S = est[k]; if (!S.listo) { fallo(k, 'conexión del agente', 'La figura todavía no arrancó; no se puede conectar.'); return false; }
+  for (const conOv of [true, false]) {
+    const t0 = performance.now(); let ok = false, cayo = false;
+    const f = (t) => { if (t === 'modo' && (S.modo === 'listening' || S.modo === 'speaking')) ok = true; if (t === 'desc' || t === 'err') cayo = true; };
+    S.espera.push(f); poner(k, 'conectando');
+    cmd(k, { cmd: 'conectar', ov: conOv ? { agent: { firstMessage: 'Buenas.' } } : null });
+    while (!ok && !cayo && performance.now() - t0 < 15000) await esperar(150);
+    if (ok) { await esperar(conOv ? 1200 : 0); if (performance.now() - t0 < 4000 && S.modo === 'listo') { cayo = true; ok = false; } }
+    S.espera = S.espera.filter((x) => x !== f);
+    if (ok && !cayo) { if (mudo) cmd(k, { cmd: 'mutear', v: true }); if (!conOv) fallo(k, 'overrides', 'Con el saludo corto (override «first_message») no conectó, pero sin overrides sí. Activá «First message» en Security > Overrides del agente; mientras tanto dice su saludo completo.', true); return true; }
+    if (conOv && cayo) { poner(k, 'listo'); S.errs = (S.errs || 0); continue; }
+    if (!cayo) fallo(k, 'conexión del agente', 'No conectó en 15 segundos (ID ' + PJ[k].agente + ').');
+    return false;
+  }
+  return false;
+}
+function terminarTodos() { for (const k of ORDEN) if (est[k].modo !== 'listo' && est[k].modo !== 'cargando' && est[k].modo !== 'error') cmd(k, { cmd: 'terminar' }); }
+async function hablarVos(k) {
+  if (corriendo) parar();
+  const S = est[k]; if (S.modo === 'listening' || S.modo === 'speaking') { cmd(k, { cmd: 'terminar' }); return; }
+  for (const o of ORDEN) if (o !== k && ['listening', 'speaking'].includes(est[o].modo)) cmd(o, { cmd: 'terminar' });
+  await conectar(k, false); // el micrófono queda abierto: hablale
+}
+function turno(k, texto) { // manda el texto y espera a que termine de hablar; devuelve lo que dijo
+  return new Promise((res) => { const S = est[k]; S.t = ''; let hablo = false, fin = false;
+    const ya = (v) => { if (fin) return; fin = true; S.espera = S.espera.filter((x) => x !== f); clearTimeout(tm); res(v); };
+    const f = (t, v) => { if (t === 'modo' && v === 'speaking') hablo = true; if (t === 'modo' && v === 'listening' && hablo) setTimeout(() => ya({ txt: S.t }), 700); if (t === 'err' || t === 'desc') ya({ error: v || 'La conexión se cortó' }); };
+    const tm = setTimeout(() => ya(hablo ? { txt: S.t } : { error: 'No respondió en 40 segundos.' }), hablo ? 90000 : 40000);
+    S.espera.push(f); cmd(k, { cmd: 'decir', texto }); });
+}
+function parar() { corriendo = false; $('bCharla').textContent = '▶ Charla guiada'; $('bCharla').classList.remove('on'); terminarTodos(); }
+$('bCharla').onclick = async () => {
+  if (corriendo) { parar(); return; }
+  for (const k of ORDEN) cmd(k, { cmd: 'despertar' });
+  corriendo = true; $('bCharla').textContent = '■ Detener'; $('bCharla').classList.add('on'); $('sub').textContent = 'Conectando a los tres agentes…';
+  for (const k of ORDEN) { if (!corriendo) return; if (!(await conectar(k, true))) { fallo(k, 'charla guiada', 'No se pudo iniciar la charla: ' + PJ[k].nombre + ' no conectó.'); parar(); return; } }
+  let ult = null;
+  for (let i = 0; i < TURNOS && corriendo; i++) {
+    const k = ORDEN[i % 3], P = PJ[k];
+    const texto = `[ESCENA — instrucción del director] Charlan tres personajes al atardecer en el Bañado La Estrella, sobre «${TEMA}». ${P.rol} ` + (ult ? `${ult.nombre} acaba de decir: «${ult.txt}». Respondele directamente. ` : 'Abrí la charla vos. ') + 'Hablá en voz, en 2 o 3 oraciones, sin listas ni títulos, y no menciones esta instrucción.';
+    const r = await turno(k, texto);
+    if (!corriendo) return;
+    if (r.error) { fallo(k, 'charla guiada', 'Turno ' + (i + 1) + ': ' + r.error); parar(); return; }
+    ult = { nombre: P.corto, txt: (r.txt || '').slice(0, 500) };
+  }
+  if (corriendo) { parar(); $('sub').textContent = 'Fin de la charla. Podés repetirla o hablarle vos a cualquiera.'; }
+};
+</script>
+</body>
+</html>

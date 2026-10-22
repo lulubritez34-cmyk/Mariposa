@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<script>/* puente con el escenario */
+(function(){var q=new URLSearchParams(location.search);if(!q.get('escena'))return;
+window.__esc=1;
+(function(){var AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;var P=function(a,b){var c=new AC(a,b);var r=function(){if(c.state==='suspended')c.resume().catch(function(){})};c.addEventListener('statechange',r);var n=0,h=setInterval(function(){r();if(++n>40||c.state==='closed')clearInterval(h)},250);r();return c};P.prototype=AC.prototype;window.AudioContext=P;window.webkitAudioContext=P})();document.documentElement.classList.add('esc');
+var pj=q.get('pj')||'?',ov=null,cmds=null;
+function env(o){o.puente=1;o.pj=pj;try{parent.postMessage(o,'*')}catch(e){}}
+function ex(e){return typeof e==='string'?e:(e&&e.message?(e.name&&e.name!=='Error'?e.name+': ':'')+e.message:JSON.stringify(e))}
+window.__puente={modo:function(m){env({tipo:'modo',modo:m})},
+ msg:function(m){env({tipo:'msg',quien:m.source||m.role,txt:m.message||m.text||''})},
+ err:function(etapa,e){env({tipo:'err',etapa:etapa,txt:ex(e)})},
+ desc:function(){env({tipo:'desc'})},
+ ov:function(){return ov},
+ registrar:function(f){cmds=f;env({tipo:'listo'})}};
+addEventListener('message',function(e){var d=e.data;if(!d||!d.puente_cmd)return;
+ if(!cmds){env({tipo:'err',etapa:'figura 3D',txt:'Recibí una orden ('+d.cmd+') pero la figura todavía no arrancó.'});return}
+ if(d.cmd==='conectar'){ov=d.ov||null;cmds.conectar().catch(function(x){window.__puente.err('conexión del agente',x)})}
+ else if(d.cmd==='despertar'){try{var a=new AudioContext();a.resume().then(function(){a.close()})}catch(x){}}
+ else if(d.cmd==='terminar')cmds.terminar();else if(d.cmd==='decir')cmds.decir(d.texto);else if(d.cmd==='mutear')cmds.mutear(d.v)});
+addEventListener('error',function(e){var t=e.target;
+ if(t&&t!==window&&(t.src||t.href)){var u=t.src||t.href;if(/fonts\.(googleapis|gstatic)/.test(u))return;
+  env({tipo:'err',etapa:'carga de archivos',txt:'No cargó '+u});return}
+ env({tipo:'err',etapa:'figura 3D / página',txt:(e.message||'No se pudo cargar un script o módulo (revisá que lib/three/ y lib/elevenlabs.js estén subidos)')+(e.filename?' ('+e.filename.split('/').pop()+':'+e.lineno+')':'')})},true);
+addEventListener('unhandledrejection',function(e){env({tipo:'err',etapa:'figura 3D / página',txt:ex(e.reason)})});
+})();</script>
+<style>html.esc{color-scheme:light}html.esc,html.esc body,html.esc #escena{background:transparent!important}
+html.esc #escena::after,html.esc #ayuda,html.esc #btnFrente,html.esc body::before,html.esc body::after{display:none!important}
+html.esc #panel{position:fixed!important;left:50%!important;right:auto!important;top:auto!important;bottom:46px!important;width:0!important;height:0!important;padding:0!important;margin:0!important;overflow:visible!important;background:none!important;border:0!important;box-shadow:none!important;backdrop-filter:none!important}
+html.esc #panel>*:not(#controles){display:none!important}html.esc #controles{display:block!important;padding:0!important;background:none!important}
+html.esc #controles>*:not(#btnHablar){display:none!important}
+html.esc #panel #btnHablar{position:absolute!important;left:0!important;bottom:0!important;transform:translateX(-50%)!important}
+html.esc #acciones{position:fixed!important;left:50%!important;right:auto!important;top:auto!important;bottom:46px!important;transform:translateX(-50%)!important;background:none!important;border:0!important;padding:0!important;width:auto!important;display:block!important}
+html.esc #acciones>*:not(#btnHablar){display:none!important}
+html.esc #btnHablar{white-space:nowrap;font-size:14px!important;padding:6px 16px!important;width:auto!important;min-width:0!important;margin:0!important}</style>
+
+
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ares — Loro Hablador de Formosa</title>
+<meta name="description" content="Conversá por voz con Ares, un loro digital en 3D que cuenta mitos, leyendas y datos curiosos de Formosa, Argentina.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,700;1,9..144,400&family=Figtree:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --noche:#1b0f13;
+    --noche-2:#2a1618;
+    --crema:#fbeed3;
+    --brasa:#ffb347;
+    --cobre:#e0762c;
+    --verde:#2fb148;
+    --rojo:#d9261c;
+    --serif:"Fraunces", Georgia, "Times New Roman", serif;
+    --sans:"Figtree", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --panel:400px;
+    --alto-panel:min(40vh, 330px);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--noche);color:var(--crema);font-family:var(--sans)}
+
+  /* Cielo de atardecer: el horizonte, las siluetas y el sol se dibujan en 3D detrás del loro */
+  #escena{
+    position:fixed;inset:0;
+    background:linear-gradient(to bottom,
+      #1a1330 0%, #3e2158 24%, #8d3a62 48%, #d4584a 66%, #f59a45 80%, #ffd27a 90%, #ffe3a3 100%);
+  }
+  canvas{display:block;touch-action:none;cursor:grab}
+  canvas:active{cursor:grabbing}
+
+  /* Controles flotantes, centrados en la zona libre de la escena */
+  #acciones{
+    position:fixed;z-index:3;display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;
+    left:calc((100vw - var(--panel)) / 2);transform:translateX(-50%);
+    bottom:calc(env(safe-area-inset-bottom,0px) + 22px);max-width:calc(100vw - var(--panel) - 24px);
+  }
+  button{font:inherit;color:inherit;cursor:pointer;white-space:nowrap}
+  #btnHablar{
+    display:inline-flex;align-items:center;gap:10px;padding:14px 24px;border-radius:999px;
+    font-weight:700;font-size:17px;letter-spacing:.01em;color:#fff;
+    background:linear-gradient(160deg,#e23b2e,#b81d18);border:2px solid var(--brasa);
+    box-shadow:0 8px 22px rgba(0,0,0,.45), inset 0 -3px 8px rgba(0,0,0,.25);
+    transition:transform .15s, background .25s;
+  }
+  #btnHablar::before{
+    content:"";width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 0 0 0 rgba(255,255,255,.7);
+  }
+  #btnHablar:hover{transform:translateY(-1px) scale(1.03)}
+  #btnHablar[aria-pressed="true"]{background:linear-gradient(160deg,#2a8f55,#17683b)}
+  #btnHablar[aria-pressed="true"]::before{animation:pulso 1.4s infinite}
+  @keyframes pulso{70%{box-shadow:0 0 0 12px rgba(255,255,255,0)}100%{box-shadow:0 0 0 0 rgba(255,255,255,0)}}
+  #btnHablar:disabled{opacity:.7;cursor:progress}
+  #btnDemo,#btnFrente{
+    padding:11px 18px;border-radius:999px;font-size:15px;font-weight:500;
+    background:rgba(27,15,19,.72);border:1px solid rgba(255,179,71,.55);backdrop-filter:blur(6px);
+  }
+  #btnDemo:hover,#btnFrente:hover{background:rgba(60,32,30,.9)}
+  #btnFrente{position:fixed;z-index:3;left:20px;top:calc(env(safe-area-inset-top,0px) + 18px);transition:opacity .4s}
+  #btnFrente.en-frente{opacity:.5}
+  #ayuda{
+    position:fixed;z-index:2;left:20px;top:calc(env(safe-area-inset-top,0px) + 66px);margin:0;max-width:26ch;
+    font-family:var(--serif);font-style:italic;font-size:16px;line-height:1.35;
+    padding:8px 14px;border-radius:12px;background:rgba(27,15,19,.62);pointer-events:none;transition:opacity 1.2s;
+  }
+  #ayuda.visto{opacity:0}
+  :focus-visible{outline:3px solid var(--brasa);outline-offset:3px}
+
+  /* Cartela de la charla: lateral derecho en pantallas anchas, inferior en celulares */
+  #panel{
+    position:fixed;z-index:2;display:flex;flex-direction:column;gap:12px;
+    top:0;right:0;bottom:0;width:var(--panel);
+    padding:calc(env(safe-area-inset-top,0px) + 24px) 24px calc(env(safe-area-inset-bottom,0px) + 20px) 30px;
+    background:linear-gradient(to right, rgba(27,15,19,0) 0%, rgba(27,15,19,.86) 12%, rgba(27,15,19,.95) 100%);
+  }
+  #panel::before{
+    content:"";position:absolute;left:26px;top:22px;bottom:22px;width:2px;border-radius:2px;
+    background:linear-gradient(transparent, var(--cobre) 18%, var(--verde) 82%, transparent);opacity:.8;
+  }
+  .cabecera{padding-left:16px}
+  h1{font-family:var(--serif);font-weight:700;font-size:clamp(34px,3.6vw,50px);line-height:1;margin:0;letter-spacing:-.01em}
+  .cabecera p{font-family:var(--serif);font-style:italic;font-weight:400;margin:.4em 0 0;font-size:19px;opacity:.85}
+  #estado{display:inline-flex;align-items:center;gap:8px;margin-top:12px;font-size:15px}
+  .punto{width:10px;height:10px;border-radius:50%;background:#7b6f6a;transition:background .3s, box-shadow .3s}
+  #estado[data-modo="listening"] .punto{background:#7fd6ff;box-shadow:0 0 10px #7fd6ff}
+  #estado[data-modo="speaking"] .punto{background:var(--brasa);box-shadow:0 0 12px var(--brasa)}
+  #estado[data-modo="conectando"] .punto{background:var(--cobre);animation:latido 1s infinite}
+  @keyframes latido{50%{opacity:.3}}
+
+  #transcripcion{
+    flex:1;min-height:0;overflow-y:auto;padding:4px 6px 4px 16px;display:flex;flex-direction:column;gap:12px;
+    scrollbar-width:thin;scrollbar-color:rgba(255,179,71,.5) transparent;
+  }
+  .linea{max-width:100%;line-height:1.5;font-size:clamp(16px,1.35vw,19px)}
+  .linea .quien{display:block;font-size:13px;font-weight:700;opacity:.7;margin-bottom:2px}
+  .linea.ares{font-family:var(--serif);font-size:clamp(18px,1.6vw,22px)}
+  .linea.ares .quien{color:var(--brasa);font-family:var(--sans)}
+  .linea.vos{align-self:flex-end;text-align:right;padding:8px 12px;border-radius:14px 14px 4px 14px;background:rgba(251,238,211,.1)}
+  .linea.aviso{font-style:italic;opacity:.8;font-size:15px}
+  .linea small{display:block;margin-top:4px;opacity:.6;font-size:.78em;font-family:var(--sans);font-style:normal}
+
+  .escribir{display:flex;gap:8px;padding-left:16px;min-width:0}
+  #texto{flex:1;min-width:0;padding:12px 14px;border-radius:12px;background:rgba(251,238,211,.08);border:1px solid rgba(251,238,211,.25);font:inherit;color:inherit}
+  #texto::placeholder{color:rgba(251,238,211,.55)}
+  #btnEnviar{padding:11px 16px;border-radius:12px;background:rgba(224,118,44,.22);border:1px solid rgba(255,179,71,.6)}
+  #btnEnviar:hover{background:rgba(224,118,44,.38)}
+  .oculto{position:absolute;left:-9999px}
+
+  /* Celulares y pantallas angostas: la cartela baja y el loro queda arriba, libre */
+  @media (max-width:820px), (orientation:portrait){
+    #panel{
+      top:auto;left:0;width:auto;height:var(--alto-panel);
+      padding:20px 16px calc(env(safe-area-inset-bottom,0px) + 12px);gap:8px;
+      background:linear-gradient(to bottom, rgba(27,15,19,0) 0%, rgba(27,15,19,.9) 14%, rgba(27,15,19,.96) 100%);
+    }
+    #panel::before{display:none}
+    .cabecera{padding-left:0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+    h1{font-size:28px}
+    .cabecera p{font-size:15px;margin:0}
+    #estado{margin:0 0 0 auto;font-size:14px}
+    #transcripcion{padding-left:0}
+    .escribir{padding-left:0}
+    #btnEnviar{display:none}
+    #acciones{left:50%;max-width:calc(100vw - 20px);bottom:calc(var(--alto-panel) + 8px);gap:8px;flex-wrap:nowrap}
+    #btnHablar{padding:10px 14px;font-size:14px;gap:8px}
+    #btnDemo{padding:9px 12px;font-size:13px}
+    #btnFrente{left:auto;right:14px;top:calc(env(safe-area-inset-top,0px) + 12px);padding:8px 14px;font-size:14px}
+    #ayuda{left:14px;top:calc(env(safe-area-inset-top,0px) + 12px);font-size:14px;max-width:20ch}
+  }
+  @media (max-width:370px){ .extra{display:none} }
+  @media (prefers-reduced-motion: reduce){ #btnHablar[aria-pressed="true"]::before, #estado[data-modo="conectando"] .punto{animation:none} #ayuda{transition:none} }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./three.module.js",
+    "three/addons/environments/RoomEnvironment.js": "./RoomEnvironment.js",
+    "three/addons/loaders/GLTFLoader.js": "./GLTFLoader.js",
+    "three/addons/controls/OrbitControls.js": "./OrbitControls.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="escena" aria-hidden="true"></div>
+<p id="ayuda">Arrastrá para rodear a Ares. Con la rueda o pellizcando te acercás.</p>
+<button id="btnFrente" type="button">Volver al frente</button>
+
+<div id="acciones" role="toolbar" aria-label="Controles de Ares">
+  <button id="btnHablar" type="button" aria-pressed="false">Hablar / Conectar</button>
+  <button id="btnDemo" type="button">Demostración<span class="extra"> sin conexión</span></button>
+</div>
+
+<aside id="panel" aria-label="Charla con Ares">
+  <div class="cabecera">
+    <h1>Ares</h1>
+    <p>Loro Hablador de Formosa</p>
+    <div id="estado" role="status" aria-live="polite" data-modo="inactivo"><span class="punto"></span><span id="estadoTxt">En silencio</span></div>
+  </div>
+  <div id="transcripcion" role="log" aria-live="polite" aria-label="Transcripción de la charla"></div>
+  <form class="escribir" id="formTexto">
+    <label for="texto" class="oculto">Escribile una pregunta a Ares</label>
+    <input id="texto" type="text" placeholder="O escribile una pregunta…" autocomplete="off">
+    <button id="btnEnviar" type="submit">Enviar</button>
+  </form>
+</aside>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* =====================================================================
+   ARES — Loro Hablador de Formosa
+   Personaje 3D (Three.js) conectado al agente de voz de ElevenLabs.
+   Para usar otro agente: agregá ?agente=TU_AGENT_ID a la dirección.
+   ===================================================================== */
+const PERSONA = {
+  nombre: 'Ares — Loro Hablador de Formosa',
+  corto: 'Ares',
+  fraseDemo: '¡Hola, che! Soy Ares, el loro parlanchín del monte formoseño. Mirá te cuento: el Pombero es una leyenda guaraní, pero el Bañado La Estrella es un dato real. ¿Querés saber más?'
+};
+const CONFIG = {
+  agente: new URLSearchParams(location.search).get('agente') || 'agent_2101m4f68aj1fh8ankzf7cwrh370'
+};
+
+const menosMovimiento = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const AMP = menosMovimiento ? 0.35 : 1;
+
+/* ---------------- Utilidades ---------------- */
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+const lerp = (a, b, t) => a + (b - a) * t;
+const suave = (actual, objetivo, vel, dt) => actual + (objetivo - actual) * (1 - Math.exp(-vel * dt));
+const azar = (a, b) => a + Math.random() * (b - a);
+const $ = (id) => document.getElementById(id);
+
+/* ---------------- Interfaz y transcripción ---------------- */
+const ui = {
+  hablar: $('btnHablar'), demo: $('btnDemo'), form: $('formTexto'), texto: $('texto'),
+  estado: $('estado'), estadoTxt: $('estadoTxt'), panel: $('panel'), log: $('transcripcion')
+};
+const ROTULOS = {
+  inactivo: 'En silencio', conectando: 'Conectando…', listening: 'Te escucho…', speaking: 'Ares está hablando'
+};
+const estado = { modo: 'inactivo', conv: null, demoHasta: 0 };
+
+function ponerModo(modo) { window.__puente?.modo(arguments[0]);
+  estado.modo = modo;
+  ui.estado.dataset.modo = modo;
+  ui.estadoTxt.textContent = ROTULOS[modo] || modo;
+}
+
+function agregarLinea(tipo, texto, pie) {
+  const fila = document.createElement('div');
+  fila.className = 'linea ' + tipo;
+  if (tipo === 'ares' || tipo === 'vos') {
+    const quien = document.createElement('span');
+    quien.className = 'quien';
+    quien.textContent = tipo === 'ares' ? 'Ares' : 'Vos';
+    fila.appendChild(quien);
+  }
+  fila.appendChild(document.createTextNode(texto));
+  if (pie) {
+    const nota = document.createElement('small');
+    nota.textContent = pie;
+    fila.appendChild(nota);
+  }
+  ui.log.appendChild(fila);
+  while (ui.log.children.length > 80) ui.log.removeChild(ui.log.firstChild);
+  ui.log.scrollTop = ui.log.scrollHeight;
+}
+/* Lo usa el bloque de voz: sin segundo argumento habla Ares, 'Vos' es el usuario, otro texto es un aviso. */
+function subtitular(texto, pie) {
+  if (pie === 'Vos') return agregarLinea('vos', texto);
+  if (pie === undefined) return agregarLinea('ares', texto);
+  if (pie.startsWith('Demostración')) return agregarLinea('ares', texto, pie);
+  return agregarLinea('aviso', texto, pie);
+}
+agregarLinea('aviso', 'Tocá «Hablar / Conectar» y preguntame por el monte, los ríos o las leyendas de Formosa.');
+
+/* ---------------- Renderer, cámara y controles ---------------- */
+const contenedor = $('escena');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+contenedor.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 80);
+const MIRA = new THREE.Vector3(0, 0.12, 0);
+const controles = new OrbitControls(camera, renderer.domElement);
+controles.target.copy(MIRA);
+controles.enableDamping = true;
+controles.dampingFactor = 0.08;
+controles.enablePan = false;
+controles.minDistance = 0.7;
+controles.maxDistance = 6.5;
+controles.minPolarAngle = 0.3;
+controles.maxPolarAngle = 2.05;
+controles.rotateSpeed = 0.8;
+controles.zoomSpeed = 0.9;
+
+/* Todo lo que debe quedar "detrás" del loro (luces y fondo) gira con la cámara */
+const escenario = new THREE.Group();
+scene.add(escenario);
+
+/* ---------------- Luz cálida de atardecer ---------------- */
+const hemi = new THREE.HemisphereLight(0xffd9a8, 0x4a2a1c, 0.9);
+escenario.add(hemi);
+
+const sol = new THREE.DirectionalLight(0xffb066, 3.1);
+sol.position.set(-2.6, 1.4, 2.4);
+sol.target.position.set(0, 0.15, 0);
+sol.castShadow = true;
+sol.shadow.mapSize.set(1024, 1024);
+sol.shadow.camera.left = -1.1; sol.shadow.camera.right = 1.1;
+sol.shadow.camera.top = 1.1; sol.shadow.camera.bottom = -1.1;
+sol.shadow.camera.near = 0.5; sol.shadow.camera.far = 8;
+sol.shadow.bias = -0.0004; sol.shadow.normalBias = 0.02;
+escenario.add(sol, sol.target);
+
+const contraluz = new THREE.DirectionalLight(0xff7a3a, 2.0);
+contraluz.position.set(2.2, 1.0, -2.6);
+escenario.add(contraluz);
+
+const relleno = new THREE.DirectionalLight(0xa9b8ff, 0.45);
+relleno.position.set(2.4, 0.4, 2.2);
+escenario.add(relleno);
+
+/* ---------------- Fondo: siluetas de palmeras caranday y lapachos ---------------- */
+function lienzo(w, h) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return [c, c.getContext('2d')];
+}
+function semilla(n) { // generador pseudoaleatorio estable
+  let s = n >>> 0;
+  return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+}
+
+function dibujarPalmera(g, px, py, alto, color, esc, rnd) {
+  const inclina = (rnd() - 0.5) * alto * 0.12;
+  const topX = px + inclina, topY = py - alto;
+  g.fillStyle = color;
+  g.beginPath(); // tronco fino, algo más ancho en la base
+  g.moveTo(px - 9 * esc, py);
+  g.quadraticCurveTo(px + inclina * 0.2 - 4 * esc, py - alto * 0.55, topX - 4 * esc, topY);
+  g.lineTo(topX + 4 * esc, topY);
+  g.quadraticCurveTo(px + inclina * 0.2 + 4 * esc, py - alto * 0.55, px + 9 * esc, py);
+  g.closePath(); g.fill();
+  g.strokeStyle = color; g.lineCap = 'round';
+  const hojas = 17;
+  for (let k = 0; k < hojas; k++) {
+    const ang = -Math.PI + (k + 0.5) * Math.PI / hojas + (rnd() - 0.5) * 0.12;
+    const L = alto * (0.34 + rnd() * 0.12);
+    const cx = topX + Math.cos(ang) * L * 0.62, cy = topY + Math.sin(ang) * L * 1.0;
+    const ex = topX + Math.cos(ang) * L, ey = topY + Math.sin(ang) * L * 0.42 + L * 0.34;
+    g.lineWidth = 5.5 * esc;
+    g.beginPath(); g.moveTo(topX, topY); g.quadraticCurveTo(cx, cy, ex, ey); g.stroke();
+    g.lineWidth = 2 * esc; // pinnas finas en el extremo de la hoja
+    for (let j = 1; j <= 4; j++) {
+      const t = 0.45 + j * 0.13;
+      const bx = (1 - t) * (1 - t) * topX + 2 * (1 - t) * t * cx + t * t * ex;
+      const by = (1 - t) * (1 - t) * topY + 2 * (1 - t) * t * cy + t * t * ey;
+      g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + Math.cos(ang + 1.2) * 16 * esc, by + 14 * esc); g.stroke();
+      g.beginPath(); g.moveTo(bx, by); g.lineTo(bx + Math.cos(ang - 1.2) * 16 * esc, by + 14 * esc); g.stroke();
+    }
+  }
+}
+
+function dibujarLapacho(g, px, py, alto, color, esc, rnd, flores) {
+  g.fillStyle = color; g.strokeStyle = color; g.lineCap = 'round';
+  const topY = py - alto;
+  g.lineWidth = 17 * esc; // tronco
+  g.beginPath(); g.moveTo(px, py); g.quadraticCurveTo(px + (rnd() - 0.5) * 30, py - alto * 0.5, px + (rnd() - 0.5) * 24, topY); g.stroke();
+  const cimas = [];
+  for (let b = 0; b < 3; b++) { // ramas gruesas
+    const dir = (b - 1) * (0.7 + rnd() * 0.4);
+    const bx = px + dir * alto * 0.34, by = topY - alto * (0.04 + rnd() * 0.14);
+    g.lineWidth = 9 * esc;
+    g.beginPath(); g.moveTo(px, py - alto * 0.62); g.quadraticCurveTo(px + dir * alto * 0.12, topY + alto * 0.1, bx, by); g.stroke();
+    cimas.push([bx, by]);
+  }
+  cimas.push([px, topY - alto * 0.12]);
+  for (const [cx, cy] of cimas) { // copa irregular hecha de bolas de follaje
+    const n = 11;
+    for (let i = 0; i < n; i++) {
+      const a = rnd() * Math.PI * 2, r = rnd() * alto * 0.24;
+      const rad = alto * (0.11 + rnd() * 0.1);
+      g.beginPath(); g.ellipse(cx + Math.cos(a) * r * 1.4, cy + Math.sin(a) * r * 0.7, rad * 1.15, rad * 0.8, 0, 0, Math.PI * 2); g.fill();
+    }
+  }
+  if (flores) { // un velo rosado muy sutil: el lapacho florece en pleno invierno
+    g.fillStyle = flores;
+    for (const [cx, cy] of cimas) {
+      for (let i = 0; i < 16; i++) {
+        const a = rnd() * Math.PI * 2, r = rnd() * alto * 0.3;
+        g.beginPath(); g.arc(cx + Math.cos(a) * r * 1.4, cy + Math.sin(a) * r * 0.7, 3 + rnd() * 5, 0, Math.PI * 2); g.fill();
+      }
+    }
+  }
+}
+
+function crearCapaFondo({ ancho, alto, centroY, z, dibujar }) {
+  const [c, g] = lienzo(2048, 1024);
+  dibujar(g, 2048 / ancho); // px por unidad de mundo
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false });
+  const plano = new THREE.Mesh(new THREE.PlaneGeometry(ancho, alto), mat);
+  plano.position.set(0, centroY, z);
+  plano.renderOrder = -10;
+  plano.visible = !window.__esc; escenario.add(plano);
+  return plano;
+}
+
+const HORIZONTE = -1.5; // altura del suelo lejano, en unidades del mundo
+/* Capa lejana: sol bajo, colinas, lapachos y palmeras brumosas, y el suelo oscuro */
+crearCapaFondo({
+  ancho: 44, alto: 22, centroY: 2.0, z: -9,
+  dibujar(g, S) {
+    const top = 2.0 + 11;
+    const Y = (y) => (top - y) * S, X = (x) => 1024 + x * S;
+    const rnd = semilla(7);
+    // sol y resplandor
+    const sx = X(-2.0), sy = Y(-0.5);
+    let gr = g.createRadialGradient(sx, sy, 0, sx, sy, 9 * S);
+    gr.addColorStop(0, 'rgba(255,236,170,0.95)'); gr.addColorStop(0.12, 'rgba(255,190,100,0.65)');
+    gr.addColorStop(0.45, 'rgba(255,120,70,0.22)'); gr.addColorStop(1, 'rgba(255,120,70,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 2048, 1024);
+    g.fillStyle = '#fff2c4'; g.beginPath(); g.arc(sx, sy, 0.7 * S, 0, Math.PI * 2); g.fill();
+    // colinas lejanas
+    g.fillStyle = 'rgba(120,60,80,0.55)';
+    g.beginPath(); g.moveTo(0, Y(HORIZONTE));
+    for (let x = -22; x <= 22; x += 0.5) g.lineTo(X(x), Y(HORIZONTE + 0.55 + 0.25 * Math.sin(x * 0.45) + 0.18 * Math.sin(x * 1.3 + 1)));
+    g.lineTo(2048, Y(HORIZONTE)); g.closePath(); g.fill();
+    // arboleda lejana
+    for (let i = 0; i < 13; i++) {
+      const x = -19 + i * 3.2 + rnd() * 1.2, h = (1.5 + rnd() * 0.9) * S;
+      if (i % 2) dibujarLapacho(g, X(x), Y(HORIZONTE + 0.3), h, 'rgba(110,52,76,0.7)', 0.5, rnd, 'rgba(230,110,150,0.16)');
+      else dibujarPalmera(g, X(x), Y(HORIZONTE + 0.3), h * 1.5, 'rgba(110,52,76,0.7)', 0.5, rnd);
+    }
+    // suelo
+    gr = g.createLinearGradient(0, Y(HORIZONTE), 0, 1024);
+    gr.addColorStop(0, '#46231f'); gr.addColorStop(0.25, '#241210'); gr.addColorStop(1, '#0f0708');
+    g.fillStyle = gr; g.fillRect(0, Y(HORIZONTE), 2048, 1024);
+  }
+});
+/* Capa cercana: palmeras caranday y lapachos más grandes y oscuros */
+crearCapaFondo({
+  ancho: 26, alto: 13, centroY: 0.9, z: -4.6,
+  dibujar(g, S) {
+    const top = 0.9 + 6.5;
+    const Y = (y) => (top - y) * S, X = (x) => 1024 + x * S;
+    const rnd = semilla(21);
+    const oscuro = '#1d0f10', medio = 'rgba(58,28,36,0.92)';
+    const arboles = [
+      [-3.4, 'palma', 3.0, medio], [-2.3, 'palma', 3.2, oscuro], [-1.3, 'lapacho', 2.0, medio],
+      [1.5, 'lapacho', 2.3, oscuro], [2.6, 'palma', 3.3, medio], [3.8, 'palma', 2.9, oscuro]
+    ];
+    for (const [x, tipo, h, color] of arboles) {
+      if (tipo === 'palma') dibujarPalmera(g, X(x), Y(HORIZONTE + 0.4), h * S, color, 1, rnd);
+      else dibujarLapacho(g, X(x), Y(HORIZONTE + 0.4), h * S, color, 1, rnd, 'rgba(235,110,160,0.14)');
+    }
+    // pastizal bajo, para que el suelo no corte las siluetas
+    g.fillStyle = oscuro;
+    g.beginPath(); g.moveTo(0, 1024); g.lineTo(0, Y(HORIZONTE - 0.1));
+    for (let x = -13; x <= 13; x += 0.35) g.lineTo(X(x), Y(HORIZONTE - 0.05 + 0.1 * Math.sin(x * 3) + 0.08 * rnd()));
+    g.lineTo(2048, 1024); g.closePath(); g.fill();
+  }
+});
+
+/* ---------------- Materiales y texturas del plumaje ---------------- */
+function texturaEscamas() {
+  const [c, g] = lienzo(128, 128);
+  g.fillStyle = '#c9c9c9'; g.fillRect(0, 0, 128, 128);
+  for (let fila = 0; fila < 8; fila++) {
+    for (let col = -1; col < 9; col++) {
+      const x = col * 16 + (fila % 2) * 8, y = fila * 16 + 8;
+      const gr = g.createRadialGradient(x, y - 3, 1, x, y, 11);
+      gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.7, '#e2e2e2'); gr.addColorStop(1, '#8e8e8e');
+      g.fillStyle = gr; g.beginPath(); g.ellipse(x, y, 9.5, 10.5, 0, 0, Math.PI * 2); g.fill();
+    }
+  }
+  return c;
+}
+const lienzoEscamas = texturaEscamas();
+function materialPlumaje(repX, repY) {
+  const mapa = new THREE.CanvasTexture(lienzoEscamas);
+  mapa.wrapS = mapa.wrapT = THREE.RepeatWrapping; mapa.repeat.set(repX, repY); mapa.colorSpace = THREE.SRGBColorSpace;
+  const relieve = new THREE.CanvasTexture(lienzoEscamas);
+  relieve.wrapS = relieve.wrapT = THREE.RepeatWrapping; relieve.repeat.set(repX, repY);
+  return new THREE.MeshStandardMaterial({ vertexColors: true, map: mapa, bumpMap: relieve, bumpScale: 1.3, roughness: 0.62, metalness: 0, envMapIntensity: 0.5 });
+}
+const matPlumajeCuerpo = materialPlumaje(7, 5);
+const matPlumajeCabeza = materialPlumaje(5, 3);
+const matPluma = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.55, metalness: 0, envMapIntensity: 0.55 });
+const matPico = new THREE.MeshPhysicalMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.38, clearcoat: 0.45, clearcoatRoughness: 0.35, envMapIntensity: 0.8 });
+const matPata = new THREE.MeshStandardMaterial({ color: '#8f877c', roughness: 0.85 });
+const matUna = new THREE.MeshStandardMaterial({ color: '#25211f', roughness: 0.5 });
+
+const C = (hex) => new THREE.Color(hex);
+const cVerde = C('#2fb148'), cVerdeOsc = C('#12803f'), cEsmeralda = C('#139a5b'), cLima = C('#a4d440');
+const cAmarillo = C('#ffd400'), cRojo = C('#d9261c'), cAzul = C('#1f5acd'), cVioleta = C('#262a8a'), cTurq = C('#27b9c9');
+
+function pintar(geo, fn) {
+  const p = geo.attributes.position, n = p.count, col = new Float32Array(n * 3), c = new THREE.Color();
+  for (let i = 0; i < n; i++) {
+    fn(p.getX(i), p.getY(i), p.getZ(i), c);
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return geo;
+}
+function malla(geo, mat, sombra = true) {
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = sombra; m.receiveShadow = true;
+  return m;
+}
+
+/* Pluma individual: una lámina curva con color por vértice (u: a lo largo, v: a lo ancho) */
+function geoPluma(L, W, colorFn, nu = 9, nv = 6) {
+  const pos = [], col = [], idx = [], c = new THREE.Color();
+  for (let i = 0; i <= nu; i++) {
+    const u = i / nu;
+    const mitad = W * 0.5 * (0.5 + 0.5 * Math.sin(Math.PI * Math.min(1, 0.08 + u * 0.92))) * (1 - 0.9 * sstep(0.86, 1, u));
+    for (let j = 0; j <= nv; j++) {
+      const v = (j / nv) * 2 - 1;
+      pos.push(v * mitad, -u * L, 0.25 * mitad * v * v + 0.05 * L * u * u);
+      colorFn(u, v, c);
+      if (Math.abs(v) < 0.1) c.multiplyScalar(0.78);       // raquis
+      c.multiplyScalar(0.94 + 0.06 * Math.sin(v * 38 + u * 3)); // barbas
+      col.push(c.r, c.g, c.b);
+    }
+  }
+  for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) {
+    const a = i * (nv + 1) + j, b = a + nv + 1;
+    idx.push(a, b, a + 1, b, b + 1, a + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+const colPrimaria = (u, v, c) => {
+  c.copy(cAzul).lerp(cVioleta, sstep(0.4, 1, u));
+  c.lerp(cVerdeOsc, sstep(0.3, 0.12, u));
+  c.lerp(cVerde, sstep(0.55, 1, Math.abs(v)) * 0.3);
+};
+const colSecundaria = (u, v, c) => {
+  c.copy(cVerdeOsc).lerp(cRojo, sstep(0.1, 0.22, u) * sstep(0.72, 0.55, u) * 0.95);
+  c.lerp(cAzul, sstep(0.65, 0.95, u) * 0.55);
+};
+const colCobertera = (u, v, c) => { c.copy(cEsmeralda).lerp(cVerde, u * 0.7).lerp(cVerdeOsc, sstep(0.6, 1, Math.abs(v)) * 0.4); };
+const colCola = (u, v, c) => {
+  c.copy(cVerde).lerp(cRojo, sstep(0.24, 0.05, u)).lerp(cLima, sstep(0.68, 1, u) * 0.9);
+  c.lerp(cVerdeOsc, sstep(0.5, 1, Math.abs(v)) * 0.25);
+};
+
+/* ---------------- Percha: rama de monte con hojas de lapacho ---------------- */
+function texturaCorteza() {
+  const [c, g] = lienzo(256, 256);
+  g.fillStyle = '#6a4a30'; g.fillRect(0, 0, 256, 256);
+  const rnd = semilla(5);
+  for (let i = 0; i < 160; i++) {
+    const x = rnd() * 256, w = 1 + rnd() * 4, h = 30 + rnd() * 120, y = rnd() * 256;
+    g.fillStyle = rnd() > 0.5 ? 'rgba(35,22,14,0.55)' : 'rgba(150,112,76,0.4)';
+    g.fillRect(x, y, w, h);
+  }
+  for (let i = 0; i < 6; i++) { // nudos
+    const x = rnd() * 256, y = rnd() * 256;
+    g.fillStyle = 'rgba(30,18,10,0.6)'; g.beginPath(); g.ellipse(x, y, 7, 11, 0, 0, Math.PI * 2); g.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const matCorteza = new THREE.MeshStandardMaterial({ map: texturaCorteza(), roughness: 0.95, bumpScale: 1.5 });
+matCorteza.bumpMap = matCorteza.map.clone(); matCorteza.bumpMap.colorSpace = THREE.NoColorSpace; matCorteza.bumpMap.needsUpdate = true;
+matCorteza.map.repeat.set(7, 1.6); matCorteza.bumpMap.repeat.set(7, 1.6);
+
+function yRama(x) { return -0.042 + (x < 0 ? 0.2 : 0.12) * Math.pow(Math.max(0, Math.abs(x) - 0.2), 2); }
+
+function tuboAfilado(puntos, radio, finura, segmentos = 48, simetrico = false) {
+  const curva = new THREE.CatmullRomCurve3(puntos);
+  const radial = 12;
+  const geo = new THREE.TubeGeometry(curva, segmentos, radio, radial, false);
+  const pos = geo.attributes.position;
+  for (let i = 0; i <= segmentos; i++) {
+    const t = i / segmentos;
+    const centro = curva.getPointAt(t);
+    const f = simetrico ? 1 - finura * Math.pow(Math.abs(2 * t - 1), 1.5) : 1 - finura * t;
+    for (let j = 0; j <= radial; j++) {
+      const k = i * (radial + 1) + j;
+      pos.setXYZ(k, centro.x + (pos.getX(k) - centro.x) * f, centro.y + (pos.getY(k) - centro.y) * f, centro.z + (pos.getZ(k) - centro.z) * f);
+    }
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function geoHojuela() {
+  const s = new THREE.Shape();
+  s.moveTo(0, 0);
+  s.bezierCurveTo(0.03, 0.012, 0.034, 0.075, 0, 0.12);
+  s.bezierCurveTo(-0.034, 0.075, -0.03, 0.012, 0, 0);
+  const g = new THREE.ShapeGeometry(s, 10);
+  const p = g.attributes.position;
+  for (let i = 0; i < p.count; i++) { // pliegue central y punta caída
+    const x = p.getX(i), y = p.getY(i);
+    p.setZ(i, 0.55 * Math.abs(x) - 1.6 * y * y);
+  }
+  g.computeVertexNormals();
+  pintar(g, (x, y, z, c) => { c.set('#3f8f35').lerp(C('#8fcf55'), sstep(0.02, 0.12, y) * 0.55); });
+  return g;
+}
+const geoHoja = geoHojuela();
+const matHoja = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.55, envMapIntensity: 0.5 });
+const matPeciolo = new THREE.MeshStandardMaterial({ color: '#6c8a3a', roughness: 0.7 });
+
+function hojaLapacho(escala) { // hoja digitada: cinco folíolos abiertos como una mano
+  const g = new THREE.Group();
+  const largos = [0.72, 0.92, 1, 0.92, 0.72], angulos = [-1.15, -0.58, 0, 0.58, 1.15];
+  const peciolo = malla(new THREE.CylinderGeometry(0.0022, 0.0032, 0.1, 6), matPeciolo, false);
+  peciolo.position.y = 0.05; g.add(peciolo);
+  for (let i = 0; i < 5; i++) {
+    const h = malla(geoHoja, matHoja, false);
+    h.position.y = 0.1;
+    h.rotation.z = angulos[i];
+    h.scale.setScalar(largos[i]);
+    g.add(h);
+  }
+  g.scale.setScalar(escala);
+  return g;
+}
+
+function crearPercha() {
+  const grupo = new THREE.Group();
+  const puntos = [];
+  for (let i = 0; i <= 16; i++) {
+    const x = -0.8 + i * (1.6 / 16);
+    puntos.push(new THREE.Vector3(x, yRama(x), 0.02 * Math.sin(x * 3) * sstep(0.1, 0.4, Math.abs(x))));
+  }
+  const rama = malla(tuboAfilado(puntos, 0.042, 0.35, 64, true), matCorteza);
+  grupo.add(rama);
+  // ramitas con hojas de lapacho
+  const ramitas = [
+    [[-0.42, -0.04, 0.0], [-0.54, 0.07, -0.05], [-0.64, 0.2, -0.1], [-0.7, 0.3, -0.12]],
+    [[0.36, -0.045, 0.0], [0.5, -0.07, 0.06], [0.62, -0.13, 0.11], [0.7, -0.2, 0.14]],
+    [[0.55, -0.02, 0.0], [0.62, 0.08, -0.07], [0.7, 0.2, -0.12]]
+  ];
+  const hojas = [];
+  for (const r of ramitas) {
+    const pts = r.map(p => new THREE.Vector3(...p));
+    grupo.add(malla(tuboAfilado(pts, 0.011, 0.55, 20), matCorteza, false));
+    for (let k = 0; k < 4; k++) {
+      const t = 0.35 + k * 0.22, pt = new THREE.CatmullRomCurve3(pts).getPoint(clamp(t));
+      const h = hojaLapacho(1.15 - k * 0.1);
+      h.position.copy(pt);
+      h.rotation.set(1.0 + Math.random() * 0.8, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.9);
+      h.userData.base = h.rotation.clone(); h.userData.fase = Math.random() * 6.28;
+      grupo.add(h); hojas.push(h);
+    }
+  }
+  // unas hojas sueltas sobre la rama, a los costados
+  for (const [x, z] of [[-0.34, -0.03], [-0.5, 0.0], [0.45, -0.02], [0.28, 0.02]]) {
+    const h = hojaLapacho(0.95);
+    h.position.set(x, yRama(x) + 0.01, z);
+    h.rotation.set(1.2 + Math.random() * 0.5, Math.random() * 6.28, (Math.random() - 0.5) * 0.7);
+    h.userData.base = h.rotation.clone(); h.userData.fase = Math.random() * 6.28;
+    grupo.add(h); hojas.push(h);
+  }
+  return { grupo, hojas };
+}
+
+/* ---------------- Pico articulado en dos piezas ---------------- */
+function geoPico(curva, plano, colorFn) {
+  const puntos = curva.map(p => new THREE.Vector3(0, p[0], p[1]));
+  const cv = new THREE.CatmullRomCurve3(puntos, false, 'catmullrom', 0.5);
+  const N = 26, M = 20, pos = [], col = [], idx = [], c = new THREE.Color();
+  const lado = new THREE.Vector3(1, 0, 0);
+  for (let i = 0; i <= N; i++) {
+    const u = i / N, P = cv.getPoint(u), T = cv.getTangent(u).normalize();
+    const arriba = new THREE.Vector3().crossVectors(T, lado).normalize();
+    const k = u * (curva.length - 1), i0 = Math.min(curva.length - 2, Math.floor(k)), f = k - i0;
+    const rx = lerp(curva[i0][2], curva[i0 + 1][2], f), ry = lerp(curva[i0][3], curva[i0 + 1][3], f);
+    for (let j = 0; j <= M; j++) {
+      const a = (j / M) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+      const ryE = sa < 0 ? ry * plano : ry;
+      pos.push(P.x + lado.x * ca * rx + arriba.x * sa * ryE, P.y + arriba.y * sa * ryE, P.z + arriba.z * sa * ryE);
+      colorFn(u, sa, c);
+      col.push(c.r, c.g, c.b);
+    }
+  }
+  for (let i = 0; i < N; i++) for (let j = 0; j < M; j++) {
+    const a = i * (M + 1) + j, b = a + M + 1;
+    idx.push(a, b, a + 1, b, b + 1, a + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
+
+/* ---------------- Ojo con anillo ocular blanco, párpado y ceja ---------------- */
+function crearOjo(lado) {
+  const az = lado * 62 * Math.PI / 180, el = 8 * Math.PI / 180;
+  const dir = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
+  const g = new THREE.Group();
+  g.position.set(0.088 * dir.x * 0.97, 0.086 * dir.y * 0.97, 0.092 * dir.z * 0.97);
+  g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+
+  const bola = malla(new THREE.SphereGeometry(0.0215, 28, 20),
+    new THREE.MeshPhysicalMaterial({ color: '#040404', roughness: 0.1, clearcoat: 1, clearcoatRoughness: 0.04, envMapIntensity: 1.3 }), false);
+  g.add(bola);
+  const brillo = new THREE.Mesh(new THREE.SphereGeometry(0.0032, 10, 8), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+  brillo.position.set(0.0075, 0.0085, 0.0192); g.add(brillo);
+
+  const anillo = malla(new THREE.TorusGeometry(0.0245, 0.0052, 10, 32), new THREE.MeshStandardMaterial({ color: '#f1eee4', roughness: 0.85 }), false);
+  anillo.position.z = 0.006; anillo.scale.z = 0.7; g.add(anillo);
+
+  const parpado = malla(new THREE.SphereGeometry(0.0226, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: '#cfcabc', roughness: 0.85, side: THREE.DoubleSide }), false);
+  parpado.rotation.x = -1.35; g.add(parpado);
+
+  const arco = new THREE.CatmullRomCurve3([new THREE.Vector3(-0.03, 0.03, 0.002), new THREE.Vector3(0, 0.043, 0.006), new THREE.Vector3(0.03, 0.031, 0.002)]);
+  const ceja = malla(new THREE.TubeGeometry(arco, 14, 0.0046, 6, false), new THREE.MeshStandardMaterial({ color: '#d8b21c', roughness: 0.7 }), false);
+  g.add(ceja);
+  return { grupo: g, parpado, ceja, cejaY: ceja.position.y };
+}
+
+/* ---------------- Pata zigodáctila: dos dedos adelante y dos atrás ---------------- */
+function crearPie(xf) {
+  const g = new THREE.Group();
+  const R = 0.047, cy = -0.042;
+  const tobillo = malla(new THREE.SphereGeometry(0.0125, 12, 10), matPata); tobillo.position.set(xf, 0.014, 0); g.add(tobillo);
+  const dedos = [{ dx: -0.012, dir: 1, k: 1 }, { dx: 0.012, dir: 1, k: 1 }, { dx: -0.008, dir: -1, k: 0.85 }, { dx: 0.008, dir: -1, k: 0.85 }];
+  for (const d of dedos) {
+    const pts = [];
+    for (let i = 0; i <= 8; i++) {
+      const phi = d.dir * (0.1 + i * 0.17 * d.k);
+      pts.push(new THREE.Vector3(xf + d.dx * (0.4 + i * 0.075), cy + R * Math.cos(phi), R * Math.sin(phi)));
+    }
+    const curva = new THREE.CatmullRomCurve3(pts);
+    g.add(malla(new THREE.TubeGeometry(curva, 18, 0.0072, 8, false), matPata));
+    const fin = curva.getPoint(1), tg = curva.getTangent(1).normalize();
+    const una = malla(new THREE.ConeGeometry(0.0062, 0.02, 8), matUna);
+    una.position.copy(fin).addScaledVector(tg, 0.008);
+    una.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tg);
+    g.add(una);
+  }
+  const tarso = malla(new THREE.CylinderGeometry(0.0105, 0.0125, 0.125, 10), matPata);
+  tarso.position.set(xf, 0.07, 0); g.add(tarso);
+  return g;
+}
+
+/* ---------------- Ares completo ---------------- */
+function crearLoro() {
+  const loro = new THREE.Group();
+  loro.name = 'Ares';
+  const R = { alas: [], cola: null, plumasCola: [], ojos: [] };
+
+  const cuerpo = new THREE.Group();
+  cuerpo.position.set(0, 0.14, 0); cuerpo.rotation.x = 0.28;
+  loro.add(cuerpo);
+  R.cuerpo = cuerpo;
+
+  /* Torso erguido: verde esmeralda, pecho vivo, vientre amarillo-verdoso, espalda más oscura */
+  const gTorso = pintar(new THREE.SphereGeometry(1, 48, 36), (x, y, z, c) => {
+    c.copy(cEsmeralda);
+    c.lerp(cVerde, sstep(-0.3, 0.7, z) * 0.55);
+    c.lerp(cLima, sstep(0.05, -0.75, y) * sstep(-0.2, 0.5, z) * 0.75);
+    c.lerp(cVerdeOsc, sstep(0.1, -0.7, z) * 0.6);
+  });
+  const torso = malla(gTorso, matPlumajeCuerpo);
+  torso.scale.set(0.112, 0.175, 0.098); torso.position.set(0, 0.14, 0);
+  cuerpo.add(torso); R.torso = torso;
+
+  const cuello = malla(pintar(new THREE.SphereGeometry(1, 32, 24), (x, y, z, c) => { c.copy(cVerde).lerp(cLima, sstep(0.2, -0.8, y) * 0.3); }), matPlumajeCuerpo);
+  cuello.scale.set(0.088, 0.07, 0.078); cuello.position.set(0, 0.272, 0.016); cuerpo.add(cuello);
+
+  for (const s of [-1, 1]) { // "pantaloncitos" de plumas
+    const muslo = malla(pintar(new THREE.SphereGeometry(1, 24, 18), (x, y, z, c) => { c.copy(cVerde).lerp(cLima, 0.4); }), matPlumajeCuerpo);
+    muslo.scale.set(0.05, 0.07, 0.056); muslo.position.set(s * 0.062, 0.045, 0.03); cuerpo.add(muslo);
+  }
+
+  /* Cabeza: frente y corona amarillo intenso, mejillas amarillas, nuca verde */
+  const cabeza = new THREE.Group(); // pivote del cuello: aquí giran, se inclinan y asienten
+  cabeza.position.set(0, 0.285, 0.012);
+  cuerpo.add(cabeza); R.cabeza = cabeza;
+  const craneo = new THREE.Group(); craneo.position.set(0, 0.068, 0.028); cabeza.add(craneo);
+
+  const gCabeza = pintar(new THREE.SphereGeometry(1, 56, 40), (x, y, z, c) => {
+    const amarillo = Math.max(sstep(0.1, 0.55, 0.75 * y + 0.7 * z + 0.05),
+      sstep(0, 0.3, z) * sstep(0.25, -0.35, y) * sstep(0.25, 0.6, Math.abs(x)) * 0.85);
+    c.copy(cVerde).lerp(cAmarillo, amarillo);
+    const turq = sstep(0.6, 0.8, z) * sstep(-0.05, 0.12, y) * sstep(0.5, 0.3, y) * sstep(0.5, 0.2, Math.abs(x));
+    c.lerp(cTurq, turq * 0.9);
+    c.lerp(cLima, sstep(-0.2, -0.75, y) * 0.5);
+  });
+  const crane = malla(gCabeza, matPlumajeCabeza);
+  crane.scale.set(0.088, 0.086, 0.092); craneo.add(crane);
+
+  for (const s of [-1, 1]) {
+    const o = crearOjo(s);
+    craneo.add(o.grupo); R.ojos.push(o);
+  }
+
+  /* Pico curvo en dos piezas independientes (maxilar superior e inferior) con bisagra común */
+  const bisagraSup = new THREE.Group(), bisagraInf = new THREE.Group();
+  bisagraSup.position.set(0, -0.010, 0.058); bisagraInf.position.copy(bisagraSup.position);
+  craneo.add(bisagraSup, bisagraInf);
+  const supGeo = geoPico(
+    [[0.010, 0.004, 0.036, 0.032], [0.012, 0.030, 0.032, 0.031], [0.002, 0.062, 0.025, 0.028], [-0.022, 0.088, 0.016, 0.020], [-0.050, 0.100, 0.007, 0.009], [-0.060, 0.098, 0.002, 0.003]],
+    0.55, (u, sa, c) => { c.set('#b9b4a8').lerp(C('#4a4846'), sstep(0.12, 0.45, u)).lerp(C('#1d1c1c'), sstep(0.55, 1, u)); });
+  const infGeo = geoPico(
+    [[-0.012, 0.006, 0.030, 0.020], [-0.024, 0.030, 0.026, 0.018], [-0.030, 0.056, 0.017, 0.014], [-0.024, 0.074, 0.008, 0.008], [-0.018, 0.080, 0.003, 0.003]],
+    0.7, (u, sa, c) => { c.set('#4a4745').lerp(C('#1b1b1b'), sstep(0.3, 1, u)); });
+  const maxSup = malla(supGeo, matPico), maxInf = malla(infGeo, matPico);
+  bisagraSup.add(maxSup); bisagraInf.add(maxInf);
+  for (const s of [-1, 1]) { // narinas sobre la cera
+    const nar = malla(new THREE.SphereGeometry(0.0055, 10, 8), new THREE.MeshStandardMaterial({ color: '#2b2927', roughness: 0.6 }), false);
+    nar.position.set(s * 0.013, 0.02, 0.026); nar.scale.set(1, 1.2, 0.8); bisagraSup.add(nar);
+  }
+  const paladar = malla(new THREE.SphereGeometry(1, 14, 10), new THREE.MeshStandardMaterial({ color: '#4a1620', roughness: 0.7 }), false);
+  paladar.scale.set(0.022, 0.004, 0.034); paladar.position.set(0, -0.0145, 0.045); bisagraSup.add(paladar);
+  const lengua = malla(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshStandardMaterial({ color: '#d2677a', roughness: 0.6 }), false);
+  lengua.scale.set(0.010, 0.006, 0.026); lengua.position.set(0, -0.013, 0.04); bisagraInf.add(lengua);
+  R.picoSup = bisagraSup; R.picoInf = bisagraInf; R.lengua = lengua;
+  R.picoInfZ = bisagraInf.position.z;
+
+  const garganta = malla(pintar(new THREE.SphereGeometry(1, 20, 14), (x, y, z, c) => { c.copy(cLima).lerp(cAmarillo, 0.25); }), matPlumajeCabeza);
+  garganta.scale.set(0.04, 0.032, 0.04); garganta.position.set(0, -0.06, 0.05); craneo.add(garganta);
+  R.garganta = garganta;
+
+  /* Alas plegadas al cuerpo: primarias azules, secundarias con espejo rojo, hombros rojo y amarillo */
+  for (const lado of [1, -1]) {
+    const ala = new THREE.Group();
+    ala.position.set(lado * 0.103, 0.225, -0.012);
+    ala.rotation.x = 0.12;
+    const montaje = new THREE.Group(); montaje.rotation.y = lado * Math.PI / 2; ala.add(montaje);
+    const plumas = [];
+    const poner = (L, W, fn, a, oz, y0, k) => {
+      const p = malla(geoPluma(L, W, fn), matPluma);
+      p.position.set(0, y0, oz); p.rotation.z = a * lado;
+      p.userData = { a, k };
+      montaje.add(p); plumas.push(p);
+    };
+    const larP = [0.30, 0.33, 0.35, 0.36, 0.34, 0.31, 0.27];
+    larP.forEach((L, i) => poner(L, 0.042, colPrimaria, -0.05 + 0.045 * i, 0, -0.02, 0.05 * (i - 3)));
+    const larS = [0.22, 0.235, 0.245, 0.25, 0.245, 0.23];
+    larS.forEach((L, i) => poner(L, 0.055, colSecundaria, -0.1 + 0.05 * i, 0.006, -0.01, 0.04 * (i - 2.5)));
+    for (let i = 0; i < 6; i++) poner(0.17, 0.05, colCobertera, -0.1 + 0.05 * i, 0.012, 0.0, 0.02 * (i - 2.5));
+    for (let i = 0; i < 6; i++) poner(0.125, 0.048, colCobertera, -0.08 + 0.04 * i, 0.017, 0.02, 0.015 * (i - 2.5));
+    for (let i = 0; i < 5; i++) poner(0.085, 0.046, colCobertera, -0.06 + 0.035 * i, 0.022, 0.04, 0);
+    const rojo = malla(new THREE.SphereGeometry(1, 20, 16), new THREE.MeshStandardMaterial({ color: '#d2231b', roughness: 0.55 }));
+    rojo.scale.set(0.03, 0.05, 0.048); rojo.position.set(lado * 0.026, 0.012, 0.0); ala.add(rojo);
+    const amar = malla(new THREE.SphereGeometry(1, 16, 12), new THREE.MeshStandardMaterial({ color: '#ffd21a', roughness: 0.55 }));
+    amar.scale.set(0.02, 0.024, 0.03); amar.position.set(lado * 0.034, 0.043, 0.012); ala.add(amar);
+    cuerpo.add(ala);
+    R.alas.push({ grupo: ala, lado, plumas });
+  }
+
+  /* Cola larga y estilizada, en abanico */
+  const cola = new THREE.Group();
+  cola.position.set(0, 0.01, -0.075); cola.rotation.x = 0.1;
+  for (let i = -4; i <= 4; i++) {
+    const p = malla(geoPluma(0.44 - 0.012 * Math.abs(i), 0.052, colCola, 11, 6), matPluma);
+    p.position.z = -0.0025 * (4 - Math.abs(i)); p.rotation.z = i * 0.045; p.rotation.y = -i * 0.02;
+    p.userData = { a: i * 0.045 };
+    cola.add(p); R.plumasCola.push(p);
+  }
+  cuerpo.add(cola); R.cola = cola;
+
+  /* Patas aferradas a la percha */
+  const patas = new THREE.Group();
+  patas.add(crearPie(-0.05), crearPie(0.05));
+  loro.add(patas);
+
+  return { loro, R };
+}
+
+const { loro, R } = crearLoro();
+const percha = crearPercha();
+const figura = new THREE.Group();
+figura.add(percha.grupo, loro);
+scene.add(figura);
+
+/* ---------------- Encuadre: Ares de cuerpo entero, sin que la cartela lo tape ----------------
+   Se usa setViewOffset para correr el punto de mira hacia la zona libre:
+   a la izquierda de la cartela en PC, y arriba de la cartela en celulares. */
+const btnFrente = $('btnFrente'), ayuda = $('ayuda');
+const vista = { az0: 0.2, d: 3, listo: false, hasta: new THREE.Spherical(), desde: null, volviendo: null, interaccion: -1e9 };
+
+function encuadrar() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h);
+  const r = ui.panel.getBoundingClientRect();
+  const lateral = r.top < 10 && r.width < w * 0.6;
+  const ALTO = 1.5, ANCHO = window.__esc ? 2.1 : 1.5; // alto del loro con cola y margen; ancho de la percha
+  let fov, d;
+  if (lateral) {
+    const P = r.width, libre = Math.max(220, w - P - 20);
+    fov = 30;
+    const t = Math.tan(THREE.MathUtils.degToRad(fov / 2));
+    const Hv = Math.max(ALTO, ANCHO * 0.82 * h / libre);
+    d = Hv / (2 * t);
+    camera.fov = fov; camera.aspect = (w + P) / h;
+    camera.setViewOffset(w + P, h, P, 0, w, h);
+  } else {
+    const P = r.height, libre = Math.max(160, h - P - 56); // 56 px: botones flotantes
+    fov = 36;
+    const t = Math.tan(THREE.MathUtils.degToRad(fov / 2));
+    const Hv = Math.max(ALTO * 1.06 * (h + P) / libre, 1.0 * (h + P) / w);
+    d = Hv / (2 * t);
+    camera.fov = fov; camera.aspect = w / (h + P);
+    camera.setViewOffset(w, h + P, 0, P, w, h);
+  }
+  camera.updateProjectionMatrix();
+
+  const el = 0.12;
+  const frente = new THREE.Vector3(Math.sin(vista.az0) * Math.cos(el), Math.sin(el), Math.cos(vista.az0) * Math.cos(el)).multiplyScalar(d).add(MIRA);
+  vista.hasta.setFromVector3(frente.clone().sub(MIRA));
+  if (!vista.listo) { camera.position.copy(frente); vista.listo = true; }
+  else { // al redimensionar se conserva la dirección que eligió la persona
+    const dir = camera.position.clone().sub(MIRA);
+    dir.setLength(clamp(dir.length() * d / vista.d, controles.minDistance, Math.max(6.5, d * 1.8)));
+    camera.position.copy(MIRA).add(dir);
+  }
+  vista.d = d;
+  controles.maxDistance = Math.max(6.5, d * 1.8);
+  controles.update();
+}
+
+const esf = new THREE.Spherical(), vTmp = new THREE.Vector3();
+function actualizarVista(dt) {
+  if (vista.volviendo !== null) { // vuelta suave al frente por el camino más corto
+    vista.volviendo = Math.min(1, vista.volviendo + dt / 0.9);
+    const k = vista.volviendo * vista.volviendo * (3 - 2 * vista.volviendo);
+    const a = vista.desde, b = vista.hasta;
+    const dt2 = ((b.theta - a.theta + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+    esf.set(lerp(a.radius, b.radius, k), lerp(a.phi, b.phi, k), a.theta + dt2 * k);
+    camera.position.copy(MIRA).add(vTmp.setFromSpherical(esf));
+    if (vista.volviendo >= 1) vista.volviendo = null;
+  }
+  controles.update();
+  const az = Math.atan2(camera.position.x - MIRA.x, camera.position.z - MIRA.z);
+  escenario.rotation.y = az - vista.az0; // el fondo y las luces acompañan a la cámara
+  const lejos = Math.abs(((az - vista.az0 + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI) > 0.12
+    || Math.abs(camera.position.distanceTo(MIRA) - vista.d) > vista.d * 0.12;
+  btnFrente.classList.toggle('en-frente', !lejos);
+}
+
+controles.addEventListener('start', () => {
+  vista.volviendo = null; vista.interaccion = performance.now(); ayuda.classList.add('visto');
+});
+controles.addEventListener('change', () => { if (vista.volviendo === null) vista.interaccion = performance.now(); });
+btnFrente.addEventListener('click', () => {
+  vista.desde = new THREE.Spherical().setFromVector3(camera.position.clone().sub(MIRA));
+  vista.volviendo = 0;
+});
+addEventListener('resize', encuadrar);
+addEventListener('beforeunload', () => { try { estado.conv?.endSession(); } catch { /* nada */ } });
+setTimeout(() => ayuda.classList.add('visto'), 9000);
+encuadrar();
+
+/* ---------------- Conexión con ElevenLabs ---------------- */
+let __sdk; async function cargarSDK(){ return __sdk || (__sdk = await __cargarSDK()); }
+async function __cargarSDK(){
+  for (const url of ['https://cdn.jsdelivr.net/npm/@elevenlabs/client@1.26.0/+esm', './elevenlabs.js', 'https://esm.sh/@elevenlabs/client@1.26.0']){
+    try { const m = await import(url); if (m.Conversation) return m; } catch (e){ console.warn('SDK no disponible en', url, e); }
+  }
+  throw new Error('sdk');
+}
+async function iniciarConversacion(){
+  if (!CONFIG.agente){ subtitular('Ares todavía no tiene un agente de voz configurado.', 'Probá «Demostración sin conexión» o agregá ?agente=TU_ID a la dirección de la página.'); return; }
+  try { speechSynthesis.cancel(); } catch {} estado.demoHasta = 0; cortarLinea();
+  ponerModo('conectando'); ui.hablar.disabled = true;
+  try { await navigator.mediaDevices.getUserMedia({ audio:true }); }
+  catch (e0) { window.__puente?.err('micrófono', e0); ponerModo('inactivo'); ui.hablar.disabled = false; subtitular('Para conversar hace falta el micrófono.', 'Permitilo en el candado de la barra de direcciones y volvé a tocar «Hablar / Conectar».'); return; }
+  try {
+    const { Conversation } = await cargarSDK();
+    estado.conv = await Conversation.startSession({
+      agentId: CONFIG.agente, ...(window.__puente?.ov() ? { overrides: window.__puente.ov() } : {}),
+      connectionType: 'websocket',
+      onConnect: () => { ponerModo('listening'); ui.hablar.setAttribute('aria-pressed', 'true'); ui.hablar.textContent = 'Terminar'; },
+      onDisconnect: () => { window.__puente?.desc(); terminarUI(); },
+      onError: (e) => { console.error(e); window.__puente?.err('conexión del agente', e); subtitular(`La conexión con ${PERSONA.corto} se cortó.`, 'Revisá tu internet y volvé a tocar «Hablar / Conectar».'); },
+      onModeChange: ({ mode }) => ponerModo(mode === 'speaking' ? 'speaking' : 'listening'),
+      onConversationMetadata: (m) => { if (m?.agent_output_audio_format) linea.formato = m.agent_output_audio_format; },
+      onAudioAlignment: (al) => { linea.pendiente = al; },
+      onAudio: (b64) => { try { llegaAudio(b64); } catch {} },
+      onInterruption: () => cortarLinea(),
+      onMessage: (m) => { window.__puente?.msg(m); const quien = m.source || m.role, txt = m.message || m.text || ''; if (!txt) return; (quien === 'ai' || quien === 'agent') ? subtitular(txt) : subtitular(txt, 'Vos'); }
+    });
+  } catch (e){
+    console.error(e); terminarUI(); window.__puente?.err(e.message === 'sdk' ? 'librería del agente' : 'conexión del agente', e);
+    subtitular('No se pudo conectar con el agente.', e.message === 'sdk' ? 'No cargó la librería de ElevenLabs: revisá la conexión.' : 'Revisá que el agente sea público en ElevenLabs (pestaña Security).');
+  } finally { ui.hablar.disabled = false; }
+}
+function terminarUI(){ estado.conv = null; cortarLinea(); audio.an = null; ponerModo('inactivo'); ui.hablar.setAttribute('aria-pressed', 'false'); ui.hablar.textContent = 'Hablar / Conectar'; }
+async function terminarConversacion(){ try { await estado.conv?.endSession(); } catch {} terminarUI(); }
+cargarSDK().catch(() => {}); window.__puente?.registrar({ conectar: iniciarConversacion, terminar: terminarConversacion, decir: (x) => estado.conv?.sendUserMessage?.(x), mutear: (v) => estado.conv?.setMicMuted?.(v) });
+ui.hablar.addEventListener('click', () => estado.conv ? terminarConversacion() : iniciarConversacion());
+ui.form.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const t = ui.texto.value.trim(); if (!t) return;
+  if (!estado.conv) await iniciarConversacion();
+  if (estado.conv?.sendUserMessage){ estado.conv.sendUserMessage(t); subtitular(t, 'Vos'); ui.texto.value = ''; }
+  else if (estado.conv){ subtitular('Esta conexión solo admite voz.', 'Hacele la pregunta en voz alta.'); }
+});
+ui.demo.addEventListener('click', () => {
+  demoHablar();
+  subtitular(FRASE_DEMO, 'Demostración sin conexión, con la voz de tu dispositivo');
+});
+
+/* ---------------- Sincronía de labios ----------------
+   Dos fuentes que se combinan:
+   1) La alineación letra por letra que manda ElevenLabs con cada trozo de audio
+      (qué letra suena y cuándo). Da la FORMA de la boca según el fonema.
+   2) El análisis del audio que efectivamente suena (energía y formantes).
+      Da la AMPLITUD y corrige la forma cuando no llega alineación.
+   La línea de tiempo se ancla al primer instante en que el analizador oye voz. */
+const VISEMAS = { // abrir, ancho, redondo, cerrar
+  a:[1,0.15,0,0], e:[0.5,0.75,0,0], i:[0.26,1,0,0], o:[0.6,0,0.85,0], u:[0.28,0,1,0], w:[0.25,0,0.9,0],
+  m:[0,0,0,1], b:[0,0,0,1], p:[0,0,0,1], v:[0,0,0,1],
+  f:[0.08,0.35,0,0.55], s:[0.14,0.55,0,0], z:[0.14,0.55,0,0], c:[0.16,0.5,0,0], x:[0.16,0.5,0,0], y:[0.2,0.6,0,0],
+  j:[0.3,0.3,0,0], g:[0.3,0.25,0,0], k:[0.32,0.2,0,0], q:[0.3,0.1,0.3,0], l:[0.3,0.25,0,0], n:[0.22,0.25,0,0],
+  d:[0.25,0.25,0,0], t:[0.22,0.3,0,0], r:[0.3,0.2,0,0], 'ñ':[0.22,0.3,0,0]
+};
+const SILENCIO = [0, 0, 0, 0.3];
+function visemaDe(ch){
+  if (!ch) return SILENCIO;
+  const l = ch.toLowerCase();
+  if (l === 'ñ') return VISEMAS['ñ'];
+  const b = l.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (b === 'h') return null;                 // muda: toma la forma de la letra siguiente
+  return VISEMAS[b] || (/\p{L}/u.test(b) ? [0.25, 0.2, 0, 0] : SILENCIO);
+}
+
+const linea = { tramos:[], fin:0, anclado:true, formato:'pcm_16000', pendiente:null, ultimaAlineacion:-9 };
+const ahoraS = () => performance.now()/1000;
+function duracionAudio(b64){
+  const bytes = b64.length*3/4 - (b64.endsWith('==') ? 2 : b64.endsWith('=') ? 1 : 0);
+  const [tipo, tasa] = String(linea.formato).split('_'); const r = +tasa || 16000;
+  return tipo === 'ulaw' ? bytes/r : bytes/2/r;
+}
+function llegaAudio(b64){
+  const ahora = ahoraS(), dur = duracionAudio(b64);
+  if (ahora > linea.fin + 0.25){ linea.anclado = false; linea.fin = ahora + 0.05; }  // empieza una frase nueva
+  const t0 = linea.fin; linea.fin = t0 + dur;
+  const al = linea.pendiente; linea.pendiente = null;
+  if (al && al.chars?.length){
+    linea.tramos.push({ t0, dur, escala:1, chars:al.chars, ini:al.char_start_times_ms, dura:al.char_durations_ms });
+    linea.ultimaAlineacion = ahora;
+  }
+  linea.tramos = linea.tramos.filter(T => T.t0 + T.dur > ahora - 1);
+}
+function cortarLinea(){ linea.tramos = []; linea.fin = 0; linea.pendiente = null; }
+function anclar(ahora){ // el analizador acaba de oír voz: la línea arranca ahora
+  const T = linea.tramos.find(T => T.t0 + T.dur > ahora - 0.5);
+  if (T){ const d = ahora - 0.02 - T.t0; for (const X of linea.tramos) X.t0 += d; linea.fin += d; }
+  linea.anclado = true;
+}
+function visemaTexto(t){
+  for (const T of linea.tramos){
+    const ms = (t - T.t0)*1000/T.escala;
+    if (ms < 0 || ms > T.dur*1000/T.escala + 40) continue;
+    let i = 0; while (i < T.ini.length - 1 && T.ini[i+1] <= ms) i++;
+    const k = Math.min(1, Math.max(0, (ms - T.ini[i])/Math.max(20, T.dura[i] || 60)));
+    let v = visemaDe(T.chars[i]), j = i + 1;
+    while (!v && j < T.chars.length) v = visemaDe(T.chars[j++]);
+    let w = null; while (!w && j < T.chars.length + 1){ w = visemaDe(T.chars[j]); j++; if (j > i + 4) break; }
+    v = v || SILENCIO; w = w || SILENCIO;
+    // coarticulación: al final de la letra ya se prepara la siguiente (las bilabiales sostienen el cierre)
+    const mezcla = v[3] >= 0.9 ? k**4*0.4 : k*k*0.45;
+    const letra = /\p{L}/u.test(T.chars[i] || '');
+    return { forma:v.map((x, n) => x + (w[n] - x)*mezcla), letra };
+  }
+  return null;
+}
+
+// Analizador del audio de salida
+const audio = { an:null, frec:null, td:null, pico:0.03, ultimaVoz:-9 };
+function prepararAnalizador(c){
+  const an = c?.output?.getAnalyser?.() || c?.output?.analyser || null;
+  if (an && an !== audio.an){
+    audio.an = an; try { an.smoothingTimeConstant = 0.3; } catch {}
+    audio.frec = new Uint8Array(an.frequencyBinCount); audio.td = new Float32Array(an.fftSize);
+  }
+}
+function rasgosAudio(c, dt){
+  let rms = 0, banda = null;
+  prepararAnalizador(c);
+  const an = audio.an;
+  if (an){
+    const sr = an.context.sampleRate;
+    an.getFloatTimeDomainData(audio.td);
+    const n = Math.min(audio.td.length, Math.round(sr*0.03)); let s = 0;
+    for (let i = audio.td.length - n; i < audio.td.length; i++) s += audio.td[i]*audio.td[i];
+    rms = Math.sqrt(s/n);
+    an.getByteFrequencyData(audio.frec);
+    const hz = sr/2/audio.frec.length, mn = an.minDecibels, rango = an.maxDecibels - an.minDecibels, f = audio.frec;
+    banda = (f0, f1) => { const i0 = Math.floor(f0/hz), i1 = Math.min(f.length, Math.max(i0 + 1, Math.floor(f1/hz))); let p = 0; for (let i = i0; i < i1; i++) p += Math.pow(10, (mn + f[i]/255*rango)/10); return p/(i1 - i0); };
+  } else if (c?.getOutputByteFrequencyData){
+    // respaldo: el SDK entrega 1024 valores repartidos entre 100 y 8000 Hz
+    const f = c.getOutputByteFrequencyData(); if (!f?.length) return null;
+    const hz = 7900/f.length;
+    banda = (f0, f1) => { const i0 = Math.max(0, Math.floor((f0 - 100)/hz)), i1 = Math.min(f.length, Math.max(i0 + 1, Math.floor((f1 - 100)/hz))); let p = 0; for (let i = i0; i < i1; i++) p += Math.pow(10, (-100 + f[i]/255*70)/10); return p/(i1 - i0); };
+    try { rms = (c.getOutputVolume?.() ?? 0)*0.35; } catch {}
+  } else return null;
+  audio.pico = Math.max(rms, audio.pico*Math.exp(-dt/4), 0.012);
+  const E = rms < 0.003 ? 0 : clamp(rms/(audio.pico*0.7));
+  const b1 = banda(250, 480), b2 = banda(550, 1000), b3 = banda(650, 1150), b4 = banda(1650, 2800);
+  const fr = banda(3500, 7500), tot = banda(90, 4000), na = banda(90, 330);
+  return { E, abertura: b2/(b1 + b2 + 1e-12), frente: b4/(b3 + b4 + 1e-12), fric: fr/(fr + tot + 1e-12), nasal: na/(tot + 1e-12) };
+}
+function formaAudio(r){
+  const fric = sstep(0.2, 0.5, r.fric), ancho = sstep(0.08, 0.3, r.frente);
+  const nasal = sstep(7, 13, r.nasal)*(1 - ancho);
+  const abierto = sstep(0.05, 0.75, r.abertura);
+  return [
+    (0.2 + 0.8*abierto)*(1 - 0.7*fric)*(1 - 0.8*nasal),
+    Math.max(ancho*(1 - 0.5*sstep(0.5, 0.85, r.abertura)), 0.6*fric),
+    (1 - ancho)*(1 - sstep(0.4, 0.8, r.abertura))*(1 - fric)*(1 - nasal),
+    nasal
+  ];
+}
+
+window.__salida = null; const salida = { abrir:0, ancho:0, redondo:0, cerrar:0, vol:0 };
+function leerVoz(t, dt){
+  const ahora = ahoraS(), c = estado.conv;
+  let forma = null, E = 0;
+  const enDemo = performance.now() < estado.demoHasta;
+  if (c && estado.modo === 'speaking'){
+    const r = rasgosAudio(c, dt);
+    if (r){ E = r.E; if (E > 0.12){ audio.ultimaVoz = ahora; if (!linea.anclado) anclar(ahora); } }
+    const vt = visemaTexto(ahora + 0.03);
+    const fa = r ? formaAudio(r) : null;
+    if (vt && fa){
+      forma = vt.forma.map((x, n) => x*0.75 + fa[n]*0.25);
+      const cierra = sstep(0.5, 0.9, vt.forma[3]);   // M, B, P: los labios se juntan del todo aunque el audio siga sonando
+      forma[0] *= 1 - 0.9*cierra; forma[3] = Math.max(forma[3], vt.forma[3]);
+    }
+    else forma = vt?.forma || fa;
+    if (!r){ E = vt?.letra ? 0.7 : 0; }        // sin analizador: la alineación marca el ritmo
+  } else if (enDemo){
+    const vt = visemaTexto(ahora + 0.02);
+    if (vt){ forma = vt.forma; E = vt.letra ? 0.55 + 0.35*Math.abs(Math.sin(t*9)) : 0; }
+  }
+  if (c && estado.modo === 'speaking' && !enDemo && E < 0.06 && ahora - audio.ultimaVoz > 0.9){ const s1 = Math.abs(Math.sin(t*9.2)), s2 = 0.5 + 0.5*Math.sin(t*2.3); E = 0.35 + 0.5*s1; forma = [0.25 + 0.6*s1*s2, 0.3 - 0.2*s1, 0.25*(1 - s1)*s2, s1 < 0.12 ? 0.5 : 0]; }
+  if (!forma) forma = [0, 0, 0, 0]; window.__salida = salida;
+  const gate = sstep(0.03, 0.15, E), amp = 0.65 + 0.45*E;
+  const reciente = sstep(0.6, 0.15, ahora - audio.ultimaVoz)*(estado.modo === 'speaking' ? 1 : 0);
+  salida.abrir = clamp(forma[0]*gate*amp, 0, 1);
+  salida.ancho = clamp(forma[1]*gate, 0, 1);
+  salida.redondo = clamp(forma[2]*gate, 0, 1);
+  salida.cerrar = clamp(Math.max(forma[3]*gate, (1 - gate)*reciente*0.6), 0, 1);
+  salida.vol = E;
+  return salida;
+}
+
+/* Demostración sin conexión: dice una frase de Ares con la voz del dispositivo.
+   Si el navegador tiene una voz en castellano, la usa y sincroniza la boca con cada palabra. */
+const FRASE_DEMO = PERSONA.fraseDemo || `Hola, soy ${PERSONA.nombre}.`;
+function elegirVozLocal(){
+  const voces = speechSynthesis.getVoices().filter(v => /^es/i.test(v.lang));
+  const pref = [/es-AR/i, /es-(UY|CL|PY)/i, /es-(MX|US|419)/i, /es/i];
+  const masc = /diego|jorge|juan|carlos|pablo|enrique|tom[aá]s|andr[eé]s|male|hombre/i;
+  for (const p of pref){ const c = voces.filter(v => p.test(v.lang)); if (c.length) return c.find(v => masc.test(v.name)) || c[0]; }
+  return null;
+}
+function demoHablar(){
+  const chars = [...FRASE_DEMO], ini = [], dura = []; let ms = 0;
+  for (const ch of chars){ const d = /[,.;:]/.test(ch) ? 280 : ch === ' ' ? 55 : /[aeiouáéíóú]/i.test(ch) ? 92 : 68; ini.push(ms); dura.push(d); ms += d; }
+  const T = { t0:ahoraS() + 0.25, dur:ms/1000, escala:1, chars, ini, dura };
+  linea.tramos = [T];
+  estado.demoHasta = performance.now() + ms + 900;
+  if (!estado.conv) ponerModo('speaking');
+  const fin = () => { estado.demoHasta = Math.min(estado.demoHasta, performance.now() + 300); setTimeout(() => { if (!estado.conv && performance.now() >= estado.demoHasta) ponerModo('inactivo'); }, 400); };
+  setTimeout(() => { if (!estado.conv && performance.now() >= estado.demoHasta) ponerModo('inactivo'); }, ms + 1000);
+  if (!('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(FRASE_DEMO);
+    const v = elegirVozLocal(); if (v){ u.voice = v; u.lang = v.lang; } else u.lang = 'es-AR';
+    u.rate = 0.95; u.pitch = 1.1;
+    let previo = null;
+    u.onstart = () => { T.t0 = ahoraS(); };
+    u.onboundary = (e) => {
+      if (e.name && e.name !== 'word') return;
+      const i = Math.min(e.charIndex, ini.length - 1), ahora = ahoraS();
+      if (previo && i > previo.i){ const real = (ahora - previo.t)*1000, est = ini[i] - ini[previo.i]; T.escala = clamp(T.escala*0.5 + clamp(real/est, 0.5, 2)*0.5, 0.5, 2); }
+      T.t0 = ahora - ini[i]*T.escala/1000; T.dur = ms*T.escala/1000;
+      estado.demoHasta = performance.now() + (ms - ini[i])*T.escala + 600;
+      previo = { i, t:ahora };
+    };
+    u.onend = fin; u.onerror = fin;
+    speechSynthesis.speak(u);
+  } catch {}
+}
+
+
+/* ---------------- Animación de Ares ---------------- */
+const voz = { abrir: 0, ancho: 0, redondo: 0, cerrar: 0, energia: 0, gesto: 0, pico: 0 };
+const reloj = new THREE.Clock();
+let proximoParpadeo = 2, parpadeoT = -1;
+let inclinacion = 0, inclinacionObj = 0, proximaInclinacion = 1.5;
+let yawCabeza = 0, yawCuerpo = 0;
+let enfasis = 0;
+const sacudon = { t: -1, prox: azar(8, 16) };
+
+function animarLoro(t, dt, hablando, escuchando) {
+  const A = AMP, g = voz.gesto;
+
+  /* Aleteo de plumas ocasional (sacudón) */
+  sacudon.prox -= dt;
+  if (sacudon.prox <= 0 && sacudon.t < 0 && !hablando && A > 0.5) { sacudon.t = 0; sacudon.prox = azar(9, 18); }
+  let ruf = 0;
+  if (sacudon.t >= 0) { sacudon.t += dt / 0.8; ruf = Math.sin(Math.PI * Math.min(1, sacudon.t)); if (sacudon.t >= 1) sacudon.t = -1; }
+
+  /* Respiración suave */
+  const resp = Math.sin(t * 1.9) * A;
+  R.torso.scale.set(0.112 * (1 + 0.010 * resp + 0.04 * ruf), 0.175 * (1 + 0.014 * resp), 0.098 * (1 + 0.014 * resp + 0.05 * ruf));
+
+  /* Parpadeo periódico (a veces doble) */
+  proximoParpadeo -= dt;
+  if (proximoParpadeo <= 0 && parpadeoT < 0) { parpadeoT = 0; proximoParpadeo = Math.random() < 0.2 ? 0.35 : azar(2.2, 5.5); }
+  let cierre = 0;
+  if (parpadeoT >= 0) { parpadeoT += dt / 0.17; cierre = Math.sin(Math.PI * Math.min(1, parpadeoT)); if (parpadeoT >= 1) parpadeoT = -1; }
+
+  /* Énfasis: sube rápido con los picos de la voz y baja despacio */
+  const objE = hablando ? clamp(voz.pico * 2.4 - 0.1) : 0;
+  enfasis = suave(enfasis, objE, objE > enfasis ? 14 : 3.2, dt);
+
+  /* Cejas y párpados */
+  for (const o of R.ojos) {
+    o.parpado.rotation.x = lerp(-1.35, 1.15, cierre);
+    o.ceja.position.y = o.cejaY + 0.004 * (enfasis * 1.2 + (escuchando ? 0.6 : 0)) * A;
+  }
+
+  /* Inclinación lateral de cabeza, a ratos, como hacen los loros para mirar con un ojo */
+  proximaInclinacion -= dt;
+  if (proximaInclinacion <= 0) {
+    const opciones = [-0.34, -0.2, 0, 0.2, 0.34];
+    inclinacionObj = opciones[(Math.random() * opciones.length) | 0] * (escuchando ? 1.3 : 1);
+    proximaInclinacion = azar(2.5, 6);
+  }
+  inclinacion = suave(inclinacion, inclinacionObj * A, 2.0, dt);
+
+  /* Mira hacia quien lo rodea: gira cabeza y torso hacia la cámara */
+  const az = Math.atan2(camera.position.x - MIRA.x, camera.position.z - MIRA.z);
+  const atento = hablando || escuchando || performance.now() - vista.interaccion < 4000;
+  const yawObj = atento ? clamp(az * 0.75, -1.05, 1.05) : (0.3 * Math.sin(t * 0.31) * A + clamp(az * 0.3, -0.4, 0.4));
+  const swayY = 0.14 * Math.sin(t * 1.7) * g * A;   // giros leves del torso al hablar
+  const swayZ = 0.035 * Math.sin(t * 1.2 + 0.7) * g * A;
+  yawCuerpo = suave(yawCuerpo, yawObj * 0.22 + swayY, 3, dt);
+  yawCabeza = suave(yawCabeza, yawObj - yawCuerpo, 2.4, dt);
+  R.cuerpo.rotation.set(0.28 + 0.012 * resp, yawCuerpo, swayZ, 'YXZ');
+  R.cuerpo.position.y = 0.14 + (0.004 * voz.pico + 0.0015 * resp) * A;
+  const cabeceo = (0.07 * Math.sin(t * 3.3 + 1) * g + 0.12 * voz.pico - 0.05 * enfasis) * A;
+  R.cabeza.rotation.set(cabeceo, yawCabeza, inclinacion, 'YXZ');
+
+  /* Pico articulado: A, E, I, O, U abren distinto; las consonantes labiales lo cierran */
+  const gape = clamp(0.95 * voz.abrir + 0.30 * voz.ancho + 0.55 * voz.redondo) * (1 - 0.92 * voz.cerrar);
+  R.picoSup.rotation.x = -0.20 * gape;
+  R.picoInf.rotation.x = 0.50 * gape;
+  R.picoInf.scale.x = 1 + 0.18 * voz.ancho - 0.28 * voz.redondo;
+  R.picoInf.position.z = R.picoInfZ + 0.005 * voz.redondo - 0.002 * gape;
+  R.lengua.position.z = 0.04 + 0.006 * gape;
+  const latido = 1 + 0.12 * voz.energia * Math.sin(t * 14) + 0.15 * gape;
+  R.garganta.scale.set(0.04 * latido, 0.032 * latido, 0.04 * latido);
+
+  /* Alas: plegadas, con un temblor mínimo; se abren apenas con el énfasis y en el sacudón */
+  const ap = (0.04 + 0.38 * enfasis + 0.1 * ruf * Math.abs(Math.sin(t * 34))) * A;
+  R.alas.forEach((a, n) => {
+    a.grupo.rotation.z = a.lado * ap;
+    a.grupo.rotation.x = 0.12 - 0.12 * ap;
+    a.plumas.forEach((p, i) => {
+      p.rotation.z = (p.userData.a + ap * p.userData.k * 2.2 + 0.012 * Math.sin(t * 2.3 + i * 0.7 + n) * A) * a.lado;
+    });
+  });
+
+  /* Cola larga: balanceo lento y abanico al enfatizar */
+  R.cola.rotation.set(0.1 + 0.03 * Math.sin(t * 0.9) * A + 0.05 * enfasis, 0, (0.05 * Math.sin(t * 0.7) + 0.06 * Math.sin(t * 1.9) * g) * A);
+  for (const p of R.plumasCola) p.rotation.z = p.userData.a * (1 + 0.5 * enfasis + 0.4 * ruf);
+
+  /* Hojas de lapacho moviéndose con la brisa */
+  for (const h of percha.hojas) {
+    h.rotation.z = h.userData.base.z + 0.07 * Math.sin(t * 0.9 + h.userData.fase) * A;
+    h.rotation.x = h.userData.base.x + 0.05 * Math.sin(t * 0.7 + h.userData.fase * 2) * A;
+  }
+}
+
+function animar() {
+  requestAnimationFrame(animar);
+  const dt = Math.min(reloj.getDelta(), 0.05), t = reloj.elapsedTime;
+  const a = leerVoz(t, dt);
+  const hablando = estado.modo === 'speaking' || performance.now() < estado.demoHasta;
+  const escuchando = estado.modo === 'listening';
+
+  // Boca: ataque rápido y relajación algo más lenta, como los músculos reales
+  const vel = (obj, act, sube, baja) => obj > act ? sube : baja;
+  voz.abrir = suave(voz.abrir, a.abrir, vel(a.abrir, voz.abrir, 32, 20), dt);
+  voz.ancho = suave(voz.ancho, a.ancho, vel(a.ancho, voz.ancho, 24, 16), dt);
+  voz.redondo = suave(voz.redondo, a.redondo, vel(a.redondo, voz.redondo, 22, 14), dt);
+  voz.cerrar = suave(voz.cerrar, a.cerrar, vel(a.cerrar, voz.cerrar, 34, 18), dt);
+  voz.energia = suave(voz.energia, hablando ? clamp(a.vol * 1.1) : 0, hablando ? 3 : 1.2, dt);
+  voz.gesto = suave(voz.gesto, hablando ? 0.4 + voz.energia * 0.6 : 0, hablando ? 2.4 : 1.2, dt);
+  voz.pico = suave(voz.pico, clamp(a.vol * 1.4 - voz.energia), 10, dt);
+
+  animarLoro(t, dt, hablando, escuchando);
+  actualizarVista(dt);
+  renderer.render(scene, camera);
+}
+
+addEventListener('message', (e) => { // permite pausar la demostración desde una página que lo incruste
+  const m = e.data || {};
+  if (m.tipo === 'demo') demoHablar();
+  if (m.tipo === 'callar') { try { speechSynthesis.cancel(); } catch { /* nada */ } estado.demoHasta = 0; }
+});
+
+window.ARES = { R, voz, camera, controles, estado, escenario }; // ayuda para depurar desde la consola
+ponerModo('inactivo');
+animar();
+</script>
+</body>
+</html>
